@@ -297,6 +297,8 @@ def wideAdjustParams():
                     activeJobs[job]["app"], activeJobs[job]["index"])
             # The job has been parsed. Remove it from the list.
             activeJobs.pop(job)
+            # Must break now that the dictionary size changed mid-iteration.
+            break
         # Print the current queue status.
         print(subprocess.run("squeue -u kmlamar",\
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, \
