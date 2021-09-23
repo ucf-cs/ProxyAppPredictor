@@ -235,7 +235,8 @@ def wideAdjustParams():
                 while True:
                     # Get the number of jobs currently in my queue.
                     nJobs = int(subprocess.run("squeue -u kmlamar | grep -c kmlamar", \
-                        capture_output=True, shell=True, encoding='utf-8').stdout)
+                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, \
+                        shell=True, encoding='utf-8').stdout)
                     # If there is room on the queue, break out of the loop.
                     # On my account, 5 jobs can run at once, 10 can be queued.
                     if nJobs < 10:
@@ -249,7 +250,8 @@ def wideAdjustParams():
             if SYSTEM == "voltrino":
                 print("Queuing app: " + app + "\t test: " + str(index))
                 output = subprocess.run("sbatch submit.slurm", cwd=testPath, \
-                    shell=True, encoding='utf-8', capture_output=True).stdout
+                    shell=True, encoding='utf-8', stdout=subprocess.PIPE, \
+                    stderr=subprocess.STDOUT).stdout
                 # If the output doesn't match, something went wrong.
                 if not output.startswith("Submitted batch job "):
                     print(output)
@@ -279,8 +281,9 @@ def wideAdjustParams():
     while len(activeJobs) > 0:
         for job in activeJobs:
             # If the job is done, it will not be found in the queue.
-            if subprocess.run("squeue -j "+job, cwd=testPath, \
-                capture_output=True, shell=True, encoding='utf-8').stdout == \
+            if subprocess.run("squeue -j " + str(job), cwd=testPath, \
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, \
+                encoding='utf-8').stdout == \
                 "slurm_load_jobs error: Invalid job id specified":
                 
                 print("Parsing output from job: " + job \
@@ -296,9 +299,8 @@ def wideAdjustParams():
             activeJobs.pop(job)
         # Print the current queue status.
         print(subprocess.run("squeue -u kmlamar",\
-            capture_output=True, shell=True, encoding='utf-8').stdout)
-        # Wait 30 seconds before trying again.
-        time.sleep(30)
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, \
+            encoding='utf-8').stdout)
 
     # Convert each app dictionary to a DataFrame.
     for app in enabledApps:
