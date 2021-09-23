@@ -60,6 +60,8 @@ rangeParams["SWFFT"] = {"n_repetitions": [1, 2, 4, 8, 16],
 
 # Used to identify what type of machine is being used.
 SYSTEM = platform.node()
+# Time to wait on SLURM, in seconds, to avoid a busy loop.
+WAIT_TIME = 1
 
 # Used to choose which apps to test.
 enabledApps = ["ExaMiniMD"]#[rangeParams.keys()]
@@ -241,8 +243,8 @@ def wideAdjustParams():
                     # On my account, 5 jobs can run at once, 10 can be queued.
                     if nJobs < 10:
                         break
-                    # Wait 30 seconds before trying again.
-                    time.sleep(30)
+                    # Wait before trying again.
+                    time.sleep(WAIT_TIME)
             # On local, do nothing.
             
             # Run the test case.
@@ -303,6 +305,8 @@ def wideAdjustParams():
         print(subprocess.run("squeue -u kmlamar",\
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, \
             encoding='utf-8').stdout)
+        # Wait before trying again.
+        time.sleep(WAIT_TIME)
 
     # Convert each app dictionary to a DataFrame.
     for app in enabledApps:
