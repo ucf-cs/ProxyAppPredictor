@@ -161,7 +161,7 @@ def scrapeOutput(features, output, app, index):
     for line in lines:
         if line.startswith("timeTaken = "):
             features[app][index]["timeTaken"] = \
-                int(line.removeprefix("timeTaken = "))
+                int(line[len("timeTaken = "):])
         if line.startswith("error:"):
             if "error" not in features[app][index].keys():
                 features[app][index]["error"] = ""
@@ -257,7 +257,7 @@ def wideAdjustParams():
                 # Add the queued job to our wait list.
                 # We add a dictionary so we can keep track of things when we
                 # handle the output later.
-                activeJobs[int(output.removeprefix("Submitted batch job "))] = \
+                activeJobs[int(output[len("Submitted batch job "):])] = \
                     {"app": app, "index": index, "path": testPath}
             # On local, run the command.
             else:
