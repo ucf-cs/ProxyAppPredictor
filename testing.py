@@ -9,7 +9,6 @@ import platform
 import re
 import subprocess
 import time
-#from dataclasses import dataclass
 from itertools import product
 from pathlib import Path
 
@@ -64,7 +63,7 @@ SYSTEM = platform.node()
 WAIT_TIME = 1
 
 # Used to choose which apps to test.
-enabledApps = ["ExaMiniMD"]#[rangeParams.keys()]
+enabledApps = rangeParams.keys()#["ExaMiniMD"]
 
 
 def paramsToString(params):
@@ -128,6 +127,9 @@ def makeFile(app, params):
 
 
 def getCommand(app, params):
+    # Start by locally adjusting the params list to properly handle None.
+    for param in params:
+        params[param] = params[param] is not None and params[param] or ''
     # Get the executable.
     # NOTE: Is there a better way than hardcoding these into the function?
     # Does it really matter anyway? I think not.
