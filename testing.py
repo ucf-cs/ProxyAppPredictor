@@ -199,6 +199,11 @@ def wideAdjustParams():
                 # Let lattice_nx dictate the values for lattice_ny and lattice_nz.
                 prod["lattice_ny"] = prod["lattice_nx"]
                 prod["lattice_nz"] = prod["lattice_nx"]
+            if app == "SWFFT":
+                if prod["ngy"] == None and prod["ngz"] != None:
+                    # Skip this test. It is invalid.
+                    print("Skipping invalid test " + str(index))
+                    continue
 
             # Get the default parameters, which we will adjust.
             params = copy.copy(defaultParams[app])
