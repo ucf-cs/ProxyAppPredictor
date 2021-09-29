@@ -44,9 +44,9 @@ defaultParams["ExaMiniMD"] = {"units": "lj",
                               "dt": 0.005,
                               "comm_newton": "on",
                               "nsteps": 100}
-rangeParams["ExaMiniMD"] = {"lattice_nx": [1, 5, 40],#, 100, 200],
+rangeParams["ExaMiniMD"] = {"lattice_nx": [1, 5, 40, 100, 200],
                             "dt": [0.0001, 0.001, 0.005, 1.0, 2.0],
-                            "nsteps": [0, 10, ]}#100, 1000]}
+                            "nsteps": [0, 10, 100, 1000]}
 
 defaultParams["SWFFT"] = {"n_repetitions": 1,
                           "ngx": 512,
@@ -191,6 +191,7 @@ def wideAdjustParams():
         features[app] = {}
         # Loop through each combination of parameter changes.
         # prod is the cartesian product of our adjusted parameters.
+        # TODO: Perform multiple runs for each input? Perhaps 5?
         for index, prod in enumerate((dict(zip(rangeParams[app], x)) for \
             x in product(*rangeParams[app].values()))):
 
@@ -216,7 +217,7 @@ def wideAdjustParams():
             features[app][index] = params
 
             # Create a folder to hold a SLURM script and any input files needed.
-            testPath = Path("./inputs/" + app + "/" + str(index).zfill(10))
+            testPath = Path("./tests/" + app + "/" + str(index).zfill(10))
             testPath.mkdir(parents=True,exist_ok=True)
 
             # Generate the input file contents.
@@ -247,7 +248,8 @@ def wideAdjustParams():
                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, \
                         shell=True, encoding='utf-8').stdout)
                     # If there is room on the queue, break out of the loop.
-                    # On my account, 5 jobs can run at once, 10 can be queued.
+                    # On my account, 5 jobs can run at once (MaxJobsPU),
+                    # 10 can be queued (MaxSubmitPU).
                     if nJobs < 10:
                         break
                     # Wait before trying again.
@@ -304,10 +306,10 @@ def wideAdjustParams():
                         + ".out")
                 features = scrapeOutput(features, output, \
                     activeJobs[job]["app"], activeJobs[job]["index"])
-            # The job has been parsed. Remove it from the list.
-            activeJobs.pop(job)
-            # Must break now that the dictionary size changed mid-iteration.
-            break
+                # The job has been parsed. Remove it from the list.
+                activeJobs.pop(job)
+                # Must break now that the dictionary size changed mid-iteration.
+                break
         # Print the current queue status.
         print(subprocess.run("squeue -u kmlamar",\
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, \
@@ -320,7 +322,7 @@ def wideAdjustParams():
         print("Saving DataFrame for app: " + app)
         df[app] = pd.DataFrame(features[app])
         # Save parameters and results to CSV for optional recovery.
-        df[app].to_csv("./inputs/" + app + "/dataset.csv")
+        df[app].to_csv("./tests/" + app + "/dataset.csv")
 
     # Begin machine learning task.
     # TODO
@@ -338,6 +340,8 @@ def wideAdjustParams():
 
 
 def main():
+    # TODO: Optionally start training from CSV immediately.
+
     wideAdjustParams()
 
 
