@@ -71,6 +71,33 @@ rangeParams["SWFFT"] = {"n_repetitions": [1, 2, 4, 8, 16],
                         "ngy": [None, 256, 512, 1024, 2048],
                         "ngz": [None, 256, 512, 1024, 2048]}
 
+defaultParams["nekbone"] = {"ifbrick": ".false.",
+                            "iel0": 1,
+                            "ielN": 50,
+                            "step": 1,
+                            "nx0": 10,
+                            "nxN": 10,
+                            "step": 1,
+                            "npx": 0,
+                            "npy": 0,
+                            "npz": 0,
+                            "mx": 0,
+                            "my": 0,
+                            "mz": 0}
+rangeParams["nekbone"] = {"ifbrick": [".false.", ".true."],
+                          "iel0": [1, 50],
+                          "ielN": [50],
+                          "istep": [1, 2],
+                          "nx0": [1,10],
+                          "nxN": [10],
+                          "nstep": [1, 2],
+                          "npx": [0], # TODO: Get np first.
+                          "npy": [0],
+                          "npz": [0],
+                          "mx": [0], # TODO: Get nelt first.
+                          "my": [0],
+                          "mz": [0]}
+
 defaultParams["miniAMR"] = {"--help": False,
                             "--nx": 10,
                             "--ny": 10,
@@ -236,6 +263,12 @@ def makeFile(app, params):
         contents += "timestep {dt}\n".format_map(params)
         contents += "newton {comm_newton}\n".format_map(params)
         contents += "run {nsteps}\n".format_map(params)
+    elif app=="nekbone":
+        contents = ('{ifbrick} = ifbrick ! brick or linear geometry\n'
+                    '{iel0} {ielN} {istep} = iel0,ielN(per proc),stride ! range of number of elements per proc.\n'
+                    '{nx0} {nxN} {nstep} = nx0,nxN,stride ! poly. order range for nx1\n'
+                    '{npx} {npy} {npz} = npx,npy,npz ! np distrb, if != np, nekbone handle\n'
+                    '{mx} {my} {mz} = mx,my,mz ! nelt distrb, if != nelt, nekbone handle\n').format_map(params)
     return contents
 
 
@@ -253,6 +286,11 @@ def getCommand(app, params):
             exec = "/projects/ovis/UCF/voltrino_run/SWFFT/SWFFT"
         else:
             exec = "../../../SWFFT"
+    elif app == "nekbone":
+        if SYSTEM == "voltrino":
+            exec = "/projects/ovis/UCF/voltrino_run/nekbone/nekbone"
+        else:
+            exec = "../../../nekbone"
     elif app == "miniAMR":
         if SYSTEM == "voltrino":
             exec = "/projects/ovis/UCF/voltrino_run/miniAMR/miniAMR.x"
@@ -271,6 +309,8 @@ def getCommand(app, params):
         for param in params:
             params[param] = params[param] is not None and params[param] or ''
         args = "{n_repetitions} {ngx} {ngy} {ngz}".format_map(params)
+    elif app == "nekbone":
+        args = ""
     elif app == "miniAMR":
         for param in params:
             # Each of our standard parameters starts with "--".
@@ -291,7 +331,6 @@ def getCommand(app, params):
         # The object parameter is required.
         # Fill in each of these arguments.
         args += "--object {type} {bounce} {center_x} {center_y} {center_z} {movement_x} {movement_y} {movement_z} {size_x} {size_y} {size_z} {inc_x} {inc_y} {inc_z}".format_map(params)
-
 
     # Assemble the whole command.
     command = exec + " " + args
@@ -330,6 +369,15 @@ def generateTest(app, prod, index):
         if skipTests:
             if prod["ngy"] == None and prod["ngz"] != None:
                 # Skip this test. It is invalid.
+                print("Skipping invalid test " + str(index))
+                return False
+    elif app == "nekbone":
+        if skipTests:
+            if prod["iel0"] > prod["ielN"]:
+                skip = True
+            if prod["nx0"] > prod["nxN"]:
+                skip = True
+            if skip:
                 print("Skipping invalid test " + str(index))
                 return False
     elif app == "miniAMR":
@@ -381,13 +429,19 @@ def generateTest(app, prod, index):
     testPath = Path("./tests/" + app + "/" + str(index).zfill(10))
     testPath.mkdir(parents=True,exist_ok=True)
 
+    # TODO: Add support for compiling per-test binaries from here.
+
     # Generate the input file contents.
-    # TODO: Handle cases where apps require the generation of multiple input files.
+    # TODO: Handle cases where apps require the generation of multiple input files?
     fileString = makeFile(app, params)
     # If a fileString was generated
     if fileString != "":
         # Save the contents to an appropriately named file.
-        with open(testPath / "input.lj", "w+") as text_file:
+        if app == "ExaMiniMD":
+            fileName = "input.lj"
+        elif app == "nekbone":
+            fileName = "data.rea"
+        with open(testPath / fileName, "w+") as text_file:
             text_file.write(fileString)
 
     # Get the full command, with executable and arguments.
