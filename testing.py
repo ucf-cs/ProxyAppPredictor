@@ -74,10 +74,10 @@ rangeParams["SWFFT"] = {"n_repetitions": [1, 2, 4, 8, 16],
 defaultParams["nekbone"] = {"ifbrick": ".false.",
                             "iel0": 1,
                             "ielN": 50,
-                            "step": 1,
+                            "istep": 1,
                             "nx0": 10,
                             "nxN": 10,
-                            "step": 1,
+                            "nstep": 1,
                             "npx": 0,
                             "npy": 0,
                             "npz": 0,
@@ -373,6 +373,7 @@ def generateTest(app, prod, index):
                 return False
     elif app == "nekbone":
         if skipTests:
+            skip = False
             if prod["iel0"] > prod["ielN"]:
                 skip = True
             if prod["nx0"] > prod["nxN"]:
