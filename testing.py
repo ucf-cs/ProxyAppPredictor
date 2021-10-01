@@ -344,11 +344,11 @@ def scrapeOutput(features, output, app, index):
         if line.startswith("timeTaken = "):
             features[app][index]["timeTaken"] = \
                 int(line[len("timeTaken = "):])
-        if line.startswith("error:"):
+        if "error:" in line:
             if "error" not in features[app][index].keys():
                 features[app][index]["error"] = ""
             features[app][index]["error"] += line + "\n"
-        if line.startswith("libhugetlbfs"):
+        if "libhugetlbfs" in line:
             if "error" not in features[app][index].keys():
                 features[app][index]["error"] = ""
             features[app][index]["error"] += line + "\n"
