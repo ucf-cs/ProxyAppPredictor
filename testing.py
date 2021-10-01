@@ -513,26 +513,32 @@ def finishJobs():
 
     while len(activeJobs) > 0:
         for job in activeJobs:
+            earlyBreak = False
             # If the job is done, it will not be found in the queue.
-            if subprocess.run("squeue -j " + str(job), \
+            jobStatus = subprocess.run("squeue -j " + str(job), \
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, \
-                encoding='utf-8').stdout == \
-                "slurm_load_jobs error: Invalid job id specified":
-                
-                print("Parsing output from job: " + job \
+                encoding='utf-8').stdout
+            if "Invalid job id specified" in jobStatus \
+                or "kmlamar" not in jobStatus:
+                print("Parsing output from job: " + str(job) \
                     + "\tapp: " + activeJobs[job]["app"] \
-                    + "\ttest: " + activeJobs[job]["index"])
+                    + "\ttest: " + str(activeJobs[job]["index"]))
                 # Open the file with the completed job.
-                with open() as f:
-                    output = f.read(activeJobs[job]["path"] / "slurm-" + job \
-                        + ".out")
+                with open(activeJobs[job]["path"] / ("slurm-" + str(job) + ".out"), "r") as f:
+                    output = f.read()
                 features = scrapeOutput(features, output, \
                     activeJobs[job]["app"], activeJobs[job]["index"])
                 # The job has been parsed. Remove it from the list.
                 activeJobs.pop(job)
+                # An early break can ignore the sleep time. Keep going.
+                earlyBreak = True
                 # Must break now that the dictionary size changed mid-iteration.
                 break
+            else:
+                print(jobStatus)
+        if not earlyBreak:
         # Print the current queue status.
+            print(activeJobs)
         print(subprocess.run("squeue -u kmlamar",\
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, \
             encoding='utf-8').stdout)
