@@ -604,9 +604,6 @@ def wideAdjustParams():
         # Save parameters and results to CSV for optional recovery.
         df[app].to_csv("./tests/" + app + "/dataset.csv")
 
-    # Begin machine learning task.
-    # TODO
-
 
 # TODO: Consider adding code to run random permutations of tests outside of the specific set of tests we have defined. This extra variety can only help training.
 # Outline:
@@ -619,11 +616,20 @@ def wideAdjustParams():
 # Cancel at any time via keystroke.
 
 
+def readDF():
+    for app in enabledApps:
+        df[app] = pd.read_csv("./tests/" + app + "/dataset.csv")
+    return
+
+
 def main():
     # TODO: Optionally start training from CSV immediately.
+    #readDF()
+    #slightAdjustParams()
+    wideAdjustParams()
 
-    slightAdjustParams()
-    #wideAdjustParams()
+    # Begin machine learning task.
+    # TODO
 
 
 if __name__ == "__main__":
