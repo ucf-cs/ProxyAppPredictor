@@ -16,7 +16,6 @@ from pathlib import Path
 defaultParams = {}
 # A set of sane parameter ranges.
 # Our intent is to sweep through these with different input files.
-# TODO: May want to consider implicit cases where a parameter is missing and has some default value?
 rangeParams = {}
 # A dictionary of Pandas DataFrames.
 # Each application gets its own DataFrame.
@@ -31,12 +30,82 @@ SYSTEM = platform.node()
 # Time to wait on SLURM, in seconds, to avoid a busy loop.
 WAIT_TIME = 1
 # Used to choose which apps to test.
-enabledApps = rangeParams.keys()#["miniAMR"]
+# TODO: Fix miniAMR.
+enabledApps = rangeParams.keys()#["nekbone", "SWFFT", "miniAMR"]
 # Whether or not to shortcut out tests that may be redundant or invalid.
 skipTests = False
 
+snapFile = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia.gov CITATION: Thompson, Swiler, Trott, Foiles and Tucker, arxiv.org, 1409.3880 (2014)\n'
+            '\n'
+            '# Definition of SNAP potential Ta_Cand06A\n'
+            '# Assumes 1 LAMMPS atom type\n'
+            '\n'
+            'variable zblcutinner equal 4\n'
+            'variable zblcutouter equal 4.8\n'
+            'variable zblz equal 73\n'
+            '\n'
+            '# Specify hybrid with SNAP, ZBL\n'
+            '\n'
+            'pair_style hybrid/overlay &\n'
+            'zbl ${zblcutinner} ${zblcutouter} &\n'
+            'snap\n'
+            'pair_coeff 1 1 zbl ${zblz} ${zblz}\n'
+            'pair_coeff * * snap Ta06A.snapcoeff Ta Ta06A.snapparam Ta\n')
+snapcoeffFile = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia.gov CITATION: Thompson, Swiler, Trott, Foiles and Tucker, arxiv.org, 1409.3880 (2014)\n'
+            '\n'
+            '# LAMMPS SNAP coefficients for Ta_Cand06A\n'
+            '\n'
+            '1 31\n'
+            'Ta 0.5 1\n'
+            '-2.92477\n'
+            '-0.01137\n'
+            '-0.00775\n'
+            '-0.04907\n'
+            '-0.15047\n'
+            '0.09157\n'
+            '0.05590\n'
+            '0.05785\n'
+            '-0.11615\n'
+            '-0.17122\n'
+            '-0.10583\n'
+            '0.03941\n'
+            '-0.11284\n'
+            '0.03939\n'
+            '-0.07331\n'
+            '-0.06582\n'
+            '-0.09341\n'
+            '-0.10587\n'
+            '-0.15497\n'
+            '0.04820\n'
+            '0.00205\n'
+            '0.00060\n'
+            '-0.04898\n'
+            '-0.05084\n'
+            '-0.03371\n'
+            '-0.01441\n'
+            '-0.01501\n'
+            '-0.00599\n'
+            '-0.06373\n'
+            '0.03965\n'
+            '0.01072\n')
+snapparamFile = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia.gov CITATION: Thompson, Swiler, Trott, Foiles and Tucker, arxiv.org, 1409.3880 (2014)\n'
+            '\n'
+            '# LAMMPS SNAP parameters for Ta_Cand06A\n'
+            '\n'
+            '# required\n'
+            'rcutfac 4.67637\n'
+            'twojmax 6\n'
+            '\n'
+            '# optional\n'
+            '\n'
+            'rfac0 0.99363\n'
+            'rmin0 0\n'
+            'diagonalstyle 3\n'
+            'bzeroflag 0\n'
+            'quadraticflag 0\n')
+
 # A set of sane defaults based on 3d Lennard-Jones melt (in.lj).
-defaultParams["ExaMiniMD"] = {"units": "lj",
+defaultParams["ExaMiniMDbase"] = {"units": "lj",
                               "lattice": "fcc",
                               "lattice_constant": 0.8442,
                               "lattice_offset_x": 0.0,
@@ -56,17 +125,40 @@ defaultParams["ExaMiniMD"] = {"units": "lj",
                               "comm_exchange_rate": 20,
                               "thermo_rate": 10,
                               "dt": 0.005,
+                                  "comm_newton": "off",
+                                  "nsteps": 100}
+defaultParams["ExaMiniMDsnap"] = {"units": "metal",
+                                  "lattice": "sc",
+                                  "lattice_constant": 3.316,
+                                  "lattice_offset_x": 0.0,
+                                  "lattice_offset_y": 0.0,
+                                  "lattice_offset_z": 0.0,
+                                  "lattice_nx": 20,
+                                  "lattice_ny": 20,
+                                  "lattice_nz": 20,
+                                  "ntypes": 1,
+                                  "type": 1,
+                                  "mass": 180.88,
+                                  "force_type": "snap",
+                                  "force_cutoff": None,
+                                  "temperature_target": 300.0,
+                                  "temperature_seed": 4928459,
+                                  "neighbor_skin": 1.0,
+                                  "comm_exchange_rate": 1,
+                                  "thermo_rate": 5,
+                                  "dt": 0.0005,
                               "comm_newton": "on",
                               "nsteps": 100}
-rangeParams["ExaMiniMD"] = {"lattice_nx": [1, 5, 40, 100, 200],
-                            "dt": [0.0001, 0.001, 0.005, 1.0, 2.0],
+rangeParams["ExaMiniMD"] = {"force_type": ["lj/cut", "snap"],
+                            "lattice_nx": [1, 5, 40, 100, 200, 500],
+                            "dt": [0.0001, 0.0005, 0.001, 0.005, 1.0, 2.0],
                             "nsteps": [0, 10, 100, 1000]}
 
 defaultParams["SWFFT"] = {"n_repetitions": 1,
                           "ngx": 512,
                           "ngy": None,
                           "ngz": None}
-rangeParams["SWFFT"] = {"n_repetitions": [1, 2, 4, 8, 16],
+rangeParams["SWFFT"] = {"n_repetitions": [1, 2, 4, 8, 16, 64],
                         "ngx": [256, 512, 1024, 2048],
                         "ngy": [None, 256, 512, 1024, 2048],
                         "ngz": [None, 256, 512, 1024, 2048]}
@@ -91,13 +183,14 @@ rangeParams["nekbone"] = {"ifbrick": [".false.", ".true."],
                           "nx0": [1,10],
                           "nxN": [10],
                           "nstep": [1, 2],
-                          "npx": [0], # TODO: Get np first.
-                          "npy": [0],
-                          "npz": [0],
-                          "mx": [0], # TODO: Get nelt first.
-                          "my": [0],
-                          "mz": [0]}
+                          "npx": [0, 1, 10], # TODO: Get np first.
+                          "npy": [0, 1, 10],
+                          "npz": [0, 1, 10],
+                          "mx": [0, 1, 10], # TODO: Get nelt first.
+                          "my": [0, 1, 10],
+                          "mz": [0, 1, 10]}
 
+# NOTE: Several of these parameters are commented out as they are unsupported in the MPI version of the program.
 defaultParams["miniAMR"] = {"--help": False,
                             "--nx": 10,
                             "--ny": 10,
@@ -106,7 +199,7 @@ defaultParams["miniAMR"] = {"--help": False,
                             "--init_y": 1,
                             "--init_z": 1,
                             "--reorder": 1, # NOTE: Default depends on load parameter. 1 is default for RCB.
-                            "load": "rcb",
+                            #"load": "rcb",
                             "--npx": 1,
                             "--npy": 1,
                             "--npz": 1,
@@ -123,19 +216,19 @@ defaultParams["miniAMR"] = {"--help": False,
                             "--time": None,
                             "--stages_per_ts": 20,
                             "--permute": False,
-                            "--blocking_send": False,
+                            #"--blocking_send": False,
                             "--code": 0,
                             "--checksum_freq": 5,
                             "--stencil": 7,
                             "--error_tol": 8,
                             "--report_diffusion": False,
                             "--report_perf": 1,
-                            "--refine_ghosts": False,
-                            "--send_faces": False,
-                            "--change_dir": False,
-                            "--group_blocks": False,
-                            "--break_ties": False,
-                            "--limit_move": False,
+                            #"--refine_ghosts": False,
+                            #"--send_faces": False,
+                            #"--change_dir": False,
+                            #"--group_blocks": False,
+                            #"--break_ties": False,
+                            #"--limit_move": False,
                             "--num_objects": 0,
                             "type": 0,
                             "bounce": 0,
@@ -159,7 +252,7 @@ rangeParams["miniAMR"] = {"--help": [False],
                             "--init_y": [None],
                             "--init_z": [None],
                             "--reorder": [0, 1],
-                            "load": ["rcb", "morton", "hilbert", "trunc_hilbert"],
+                            #"load": ["rcb", "morton", "hilbert", "trunc_hilbert"],
                             "--npx": [1, 3],
                             "--npy": [None],
                             "--npz": [None],
@@ -176,20 +269,21 @@ rangeParams["miniAMR"] = {"--help": [False],
                             "--time": [None, 20], # Ignored if num_tsteps is used.
                             "--stages_per_ts": [0, 20],
                             "--permute": [True, False],
-                            "--blocking_send": [True, False],
+                            #"--blocking_send": [True, False],
                             "--code": [0, 1, 2],
                             "--checksum_freq": [0, 5],
                             "--stencil": [0, 7, 27],
                             "--error_tol": [0, 8],
                             "--report_diffusion": [True, False],
                             "--report_perf": [0],#list(range(0,15+1)), # Can be set to 0 in tests to disable output.
-                            "--refine_ghosts": [True, False],
-                            "--send_faces": [True, False],
-                            "--change_dir": [True, False],
-                            "--group_blocks": [True, False],
-                            "--break_ties": [True, False],
-                            "--limit_move": [True, False],
-                            "--num_objects": [0,5],#list(range(0,5)),
+                            #"--refine_ghost": [True, False],
+                            #"--send_faces": [True, False],
+                            #"--change_dir": [True, False],
+                            #"--group_blocks": [True, False],
+                            #"--break_ties": [True, False],
+                            #"--limit_move": [True, False],
+                            # TODO: Need one --object with parameters for each object. Could be complex.
+                            "--num_objects": [0, 1],#list(range(0,5)),
                             "type": list(range(0,25+1)),
                             "bounce": [0, 1],
                             "center_x": [0.0, 1.0, -1.0],
@@ -218,7 +312,7 @@ def makeSLURMScript(f):
     # The base contents of the SLURM script.
     # Use format_map() to substitute parameters.
     contents = ('#!/bin/bash\n'
-                '#SBATCH -N 4\n'
+                '#SBATCH -N {nodes}\n'
                 '#SBATCH --time=24:00:00\n'
                 '#SBATCH -J {app}\n'
                 'export OMP_NUM_THREADS=1\n'
@@ -227,7 +321,7 @@ def makeSLURMScript(f):
                 'echo "----------------------------------------"\n'
                 'START_TS=$(date +"%s")\n'
                 'echo "----------------------------------------"\n'
-                'srun --ntasks-per-node=32 {command}\n'
+                'srun --ntasks-per-node={tasks} {command}\n'
                 'echo "----------------------------------------"\n'
                 'END_TS=$(date +"%s")\n'
                 'DIFF=$(echo "$END_TS - $START_TS" | bc)\n'
@@ -255,6 +349,7 @@ def makeFile(app, params):
             contents += "pair_style {force_type} {force_cutoff}\n".format_map(params)
         else:
             contents += "pair_style {force_type}\n".format_map(params)
+            contents += "pair_coeff * * Ta06A.snapcoeff Ta Ta06A.snapparam Ta\n"
         contents += "velocity all create {temperature_target} {temperature_seed}\n".format_map(params)
         contents += "neighbor {neighbor_skin}\n".format_map(params)
         contents += "neigh_modify every {comm_exchange_rate}\n".format_map(params)
@@ -277,29 +372,29 @@ def getCommand(app, params):
     # NOTE: Is there a better way than hardcoding these into the function?
     # Does it really matter anyway? I think not.
     if app == "ExaMiniMD":
-        if SYSTEM == "voltrino":
+        if SYSTEM == "voltrino-int":
             exec = "/projects/ovis/UCF/voltrino_run/ExaMiniMD/ExaMiniMD"
         else:
             exec = "../../../ExaMiniMD"
     elif app == "SWFFT":
-        if SYSTEM == "voltrino":
+        if SYSTEM == "voltrino-int":
             exec = "/projects/ovis/UCF/voltrino_run/SWFFT/SWFFT"
         else:
             exec = "../../../SWFFT"
     elif app == "nekbone":
-        if SYSTEM == "voltrino":
+        if SYSTEM == "voltrino-int":
             exec = "/projects/ovis/UCF/voltrino_run/nekbone/nekbone"
         else:
             exec = "../../../nekbone"
     elif app == "miniAMR":
-        if SYSTEM == "voltrino":
+        if SYSTEM == "voltrino-int":
             exec = "/projects/ovis/UCF/voltrino_run/miniAMR/miniAMR.x"
         else:
             exec = "../../../miniAMR.x"
 
     args = ""
     if app == "ExaMiniMD":
-        if SYSTEM == "voltrino":
+        if SYSTEM == "voltrino-int":
             thread = 1
         else:
             thread = multiprocessing.cpu_count()
@@ -328,9 +423,10 @@ def getCommand(app, params):
             # Its value is the argument.
             if param == "load":
                 args += "--" + params["load"] + " "
-        # The object parameter is required.
+        # Create the number of objects we need to specify.
+        for idx in range(params["--num_objects"]):
         # Fill in each of these arguments.
-        args += "--object {type} {bounce} {center_x} {center_y} {center_z} {movement_x} {movement_y} {movement_z} {size_x} {size_y} {size_z} {inc_x} {inc_y} {inc_z}".format_map(params)
+            args += "--object {type} {bounce} {center_x} {center_y} {center_z} {movement_x} {movement_y} {movement_z} {size_x} {size_y} {size_z} {inc_x} {inc_y} {inc_z} ".format_map(params)
 
     # Assemble the whole command.
     command = exec + " " + args
@@ -359,7 +455,7 @@ def generateTest(app, prod, index):
     global activeJobs
     global features
 
-    # Add any test skips, input hacks, here.
+    # Add any test skips and input hacks here.
     if app == "ExaMiniMD":
         # A bit of a hack, but we don't really need to test all combinations of these.
         # Let lattice_nx dictate the values for lattice_ny and lattice_nz.
@@ -397,6 +493,7 @@ def generateTest(app, prod, index):
         prod["inc_y"] = prod["inc_x"]
         prod["inc_z"] = prod["inc_x"]
 
+        # These cases are redundant because some parameters are ignored when others are set.
         if skipTests:
             skip = False
             if prod["--uniform_refine"] == 1 and prod["--refine_freq"] != 0:
@@ -417,6 +514,15 @@ def generateTest(app, prod, index):
                 return False
 
     # Get the default parameters, which we will adjust.
+    # ExaMiniMD uses multiple sets of sane defaults based on force type.
+    if app == "ExaMiniMD":
+        if prod["force_type"] == "lj/cut":
+            params = copy.copy(defaultParams[app + "base"])
+        elif prod["force_type"] == "snap":
+            params = copy.copy(defaultParams[app + "snap"])
+        else:
+            params = copy.copy(defaultParams[app])
+    else:
     params = copy.copy(defaultParams[app])
     # Update the params based on our cartesian product.
     params.update(prod)
@@ -430,7 +536,7 @@ def generateTest(app, prod, index):
     testPath = Path("./tests/" + app + "/" + str(index).zfill(10))
     testPath.mkdir(parents=True,exist_ok=True)
 
-    # TODO: Add support for compiling per-test binaries from here.
+    # TODO: Add support for compiling per-test binaries from here, if needed.
 
     # Generate the input file contents.
     # TODO: Handle cases where apps require the generation of multiple input files?
@@ -445,28 +551,50 @@ def generateTest(app, prod, index):
         with open(testPath / fileName, "w+") as text_file:
             text_file.write(fileString)
 
+    if app == "ExaMiniMD" and params["force_type"] == "snap":
+        # Copy in Ta06A.snap, Ta06A.snapcoeff, and Ta06A.snapparam.
+        with open(testPath / "Ta06A.snap", "w+") as text_file:
+            text_file.write(snapFile)
+        with open(testPath / "Ta06A.snapcoeff", "w+") as text_file:
+            text_file.write(snapcoeffFile)
+        with open(testPath / "Ta06A.snapparam", "w+") as text_file:
+            text_file.write(snapparamFile)
+        pass
+
     # Get the full command, with executable and arguments.
     command = getCommand(app, params)
 
-    if SYSTEM == "voltrino":
+    if SYSTEM == "voltrino-int":
+        # These are the defaults right now.
+        # TODO: Consider adjusting these and treating them as a separate set of parameters.
+        scriptParams = {"app": app,
+                        "command": command,
+                        "nodes": 4,
+                        "tasks": 32}
+        # nekbone is limited to 10 processors. It gets different rules.
+        if app == "nekbone":
+            scriptParams["nodes"] = 1
+            scriptParams["tasks"] = 10
         # Generate the SLURM script contents.
-        SLURMString = makeSLURMScript({"app": app, "command": command})
+        SLURMString = makeSLURMScript(scriptParams)
         # Save the contents to an appropriately named file.
         with open(testPath / "submit.slurm", "w+") as text_file:
             text_file.write(SLURMString)
 
     # Wait until the test is ready to run.
     # On Voltrino, wait until the queue empties a bit.
-    if SYSTEM == "voltrino":
+    if SYSTEM == "voltrino-int":
         while True:
             # Get the number of jobs currently in my queue.
             nJobs = int(subprocess.run("squeue -u kmlamar | grep -c kmlamar", \
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, \
                 shell=True, encoding='utf-8').stdout)
+            # print("There are currently " + (str(nJobs) + " queued jobs for this user"))
             # If there is room on the queue, break out of the loop.
             # On my account, 5 jobs can run at once (MaxJobsPU),
-            # 10 can be queued (MaxSubmitPU).
-            if nJobs < 10:
+            # 24 can be queued (MaxSubmitPU).
+            # Can check by running: sacctmgr show qos format=MaxJobsPU,MaxSubmitPU
+            if nJobs < 24:
                 break
             # Wait before trying again.
             time.sleep(WAIT_TIME)
@@ -474,7 +602,7 @@ def generateTest(app, prod, index):
     
     # Run the test case.
     # On Voltrino, submit the SLURM script.
-    if SYSTEM == "voltrino":
+    if SYSTEM == "voltrino-int":
         print("Queuing app: " + app + "\t test: " + str(index))
         output = subprocess.run("sbatch submit.slurm", cwd=testPath, \
             shell=True, encoding='utf-8', stdout=subprocess.PIPE, \
@@ -593,6 +721,7 @@ def wideAdjustParams():
         # TODO: Perform multiple runs for each input? Perhaps 5?
         for index, prod in enumerate((dict(zip(rangeParams[app], x)) for \
             x in product(*rangeParams[app].values()))):
+            # TODO: Consider skipping to a specific index to resume tests.
             generateTest(app, prod, index)
     
     finishJobs()
