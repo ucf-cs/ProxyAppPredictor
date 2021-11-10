@@ -4,12 +4,16 @@ variety of Proxy Apps, both locally and on the Voltrino HPC testbed.
 
 import copy
 import multiprocessing
+import numbers
 import numpy as np
+import os
 import pandas as pd
 import platform
-import re
+import random
+import signal
 import subprocess
 import time
+
 from itertools import product
 from pathlib import Path
 
@@ -51,6 +55,8 @@ WAIT_TIME = 1
 enabledApps = rangeParams.keys()  # ["SWFFT", "nekbone", "miniAMR"]
 # Whether or not to shortcut out tests that may be redundant or invalid.
 skipTests = False
+# A terminate indicator. Set to True to quit gracefully.
+terminate = False
 
 snapFile = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia.gov CITATION: Thompson, Swiler, Trott, Foiles and Tucker, arxiv.org, 1409.3880 (2014)\n'
             '\n'
@@ -303,7 +309,6 @@ rangeParams["miniAMR"] = {"--help": [False],
                           # "--group_blocks": [True, False],
                           # "--break_ties": [True, False],
                           # "--limit_move": [True, False],
-                          # TODO: Need one --object with parameters for each object. Could be complex.
                           "--num_objects": [0, 1],  # list(range(0,5)),
                           "type": list(range(0, 25+1)),
                           "bounce": [0, 1],
@@ -327,6 +332,16 @@ def paramsToString(params):
         string += param + "=" \
             + str("None" if params[param] == None else params[param]) + ","
     return string
+
+
+# Get the next unused index of the associated app.
+# Enables extended testing.
+def getNextIndex(app):
+    try:
+        idx = len(os.listdir("./tests/" + app + "/"))
+    except FileNotFoundError:
+        idx = 0
+    return idx
 
 
 def makeSLURMScript(f):
@@ -558,6 +573,9 @@ def generateTest(app, prod, index):
     # Add the test number to the list of params.
     params["testNum"] = index
 
+    # Initialize the app's dictionary.
+    if app not in features:
+        features[app] = {}
     # Add the parameters to a DataFrame.
     features[app][index] = params
 
@@ -723,11 +741,8 @@ def adjustParams(startApp="", startIdx=0):
             else:
                 # Remove the requirement so subsequent apps will be checked.
                 startApp = ""
-        # Initialize the app's dictionary.
-        features[app] = {}
         # Loop through each combination of parameter changes.
         # prod is the cartesian product of our adjusted parameters.
-        # TODO: Perform multiple runs for each input? Perhaps 5?
         for index, prod in enumerate((dict(zip(rangeParams[app], x)) for
                                       x in product(*rangeParams[app].values()))):
             # Skip iterations until we reach the target starting index.
@@ -759,6 +774,42 @@ def readDF():
         # Open the existing CSV.
         df[app] = pd.read_csv("./tests/" + app + "/dataset.csv", index_col=0)
     return
+
+
+# Run random permutations of tests outside of the specific set of tests we have defined. This extra variety helps training.
+def randomTests():
+    global terminate
+    # Cancel via Ctrl+C.
+    # While we have not canceled the test:
+    while not terminate:
+        # Pick a random app.
+        app = random.choice(list(rangeParams))
+        # Get the index to save the test files.
+        index = getNextIndex(app)
+        # A parameters list to populate.
+        params = {}
+        # For each parameter:
+        for param, values in rangeParams[app].items():
+            # If it is a number:
+            if isinstance(values[-1], numbers.Number):
+                # Get lowest value.
+                minV = min(x for x in values if x is not None)
+                # Get highest value.
+                maxV = max(x for x in values if x is not None)
+                # Pick a random number between min and max to use as the parameter value.
+                if isinstance(values[-1], float):
+                    params[param] = random.uniform(minV, maxV)
+                elif isinstance(values[-1], int):
+                    params[param] = random.randint(minV, maxV)
+                else:
+                    print("Found a range with type" + str(type(values[-1])))
+                    params[param] = random.randrange(minV, maxV)
+            # Else if it has no meaningful range (ex. str):
+            else:
+                # Pick one of the values at random.
+                params[param] = random.choice(values)
+        # Run the test.
+        generateTest(app, params, index)
 
 
 # Train and test a regressor on a dataset.
@@ -835,7 +886,8 @@ def ML():
 
         # Run our regressors.
         # For now, these are a bunch of off-the-shelf regressors with default settings.
-        regression(RandomForestRegressor(), "Random Forest Regressor", X, y)
+        forestRegressor = RandomForestRegressor()
+        regression(forestRegressor, "Random Forest Regressor", X, y)
         regression(linear_model.BayesianRidge(), "Bayesian Ridge", X, y)
         regression(svm.SVR(), "Support Vector Regression", X, y)
         regression(make_pipeline(StandardScaler(), SGDRegressor(
@@ -866,21 +918,32 @@ def main():
     if fromCSV:
         readDF()
     else:
-        adjustParams("", 0)
+        # Run through all of the primary tests.
+        #adjustParams("", 0)
+        # Run tests at random indefinitely.
+        randomTests()
+    # Perform machine learning.
     ML()
 
 
-if __name__ == "__main__":
-    main()
+def exit_gracefully(signum, frame):
+    global terminate
+    # Restore the original signal handler as otherwise bad things will happen
+    # in input when CTRL+C is pressed, and our signal handler is not re-entrant.
+    signal.signal(signal.SIGINT, original_sigint)
+    try:
+        if input("\nReally quit? (y/n)> ").lower().startswith('y'):
+            terminate = True
+    except KeyboardInterrupt:
+        print("Ok ok, quitting.")
+        terminate = True
+    # Restore the exit gracefully handler here.
+    signal.signal(signal.SIGINT, exit_gracefully)
 
-# TODO: Consider adding code to run random permutations of tests outside of the specific set of tests we have defined. This extra variety can only help training.
-# Outline:
-# While we have not canceled the test:
-    # Pick a random app.
-    # For each parameter:
-    # If it is a number:
-    # Get the min and max values in the sweep.
-    # Pick a random number between min and max to use as the parameter value.
-    # Else if it is a string:
-    # Pick one of the strings at random.
-    # Cancel at any time via keystroke.
+
+if __name__ == "__main__":
+    # store the original SIGINT handler.
+    original_sigint = signal.getsignal(signal.SIGINT)
+    signal.signal(signal.SIGINT, exit_gracefully)
+    # Run main.
+    main()
