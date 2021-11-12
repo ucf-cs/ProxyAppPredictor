@@ -54,7 +54,7 @@ WAIT_TIME = 1
 # TODO: Fix miniAMR.
 enabledApps = rangeParams.keys()  # ["SWFFT", "nekbone", "miniAMR"]
 # Whether or not to shortcut out tests that may be redundant or invalid.
-skipTests = False
+skipTests = True
 # A terminate indicator. Set to True to quit gracefully.
 terminate = False
 
@@ -150,6 +150,7 @@ defaultParams["ExaMiniMDbase"] = {"units": "lj",
                                   "dt": 0.005,
                                   "comm_newton": "off",
                                   "nsteps": 100}
+# TODO: Fix the snap case.
 defaultParams["ExaMiniMDsnap"] = {"units": "metal",
                                   "lattice": "sc",
                                   "lattice_constant": 3.316,
@@ -454,7 +455,7 @@ def getCommand(app, params):
             # Each of our standard parameters starts with "--".
             if param.startswith("--"):
                 # If the parameter is unset, don't add it to the args list.
-                if params[param] is False or None or '':
+                if params[param] is False or params[param] is None or params[param] is '':
                     continue
                 # If the parameter is a flag with no value, add it alone.
                 if params[param] is True:
@@ -495,9 +496,38 @@ def scrapeOutput(output, app, index):
     return features
 
 
+def appendTest(app, test):
+    global features
+
+    print("Appending test " + str(test) + " for app " + str(app))
+    # The location of the output CSV.
+    outputFile = "./tests/" + app + "/dataset.csv"
+    # We only add the header if we are creating the file fresh.
+    needsHeader = not os.path.exists(outputFile)
+    # Make sure the error key is there. Otherwise, it'll be missing sometimes.
+    # NOTE: We need to do this for any field that is not guaranteed to be present in all tests. Additionally, things will break badly if new features are added in the future. We must start from scratch in such a case.
+    if "error" not in features[app][test].keys():
+        features[app][test]["error"] = ""
+    # Convert the test to a DataFrame.
+    dataframe = pd.DataFrame(features[app][test], index=[
+                             features[app][test]["testNum"]])
+    # Append to CSV.
+    dataframe.to_csv(outputFile, mode='a', header=needsHeader)
+
+
 def generateTest(app, prod, index):
     global activeJobs
     global features
+
+    # These are the defaults right now.
+    # TODO: Consider adjusting these and treating them as a separate set of parameters.
+    scriptParams = {"app": app,
+                    "nodes": 4,
+                    "tasks": 32}
+    # nekbone is limited to 10 processors. It gets different rules.
+    if app == "nekbone":
+        scriptParams["nodes"] = 1
+        scriptParams["tasks"] = 10
 
     # Add any test skips and input hacks here.
     if app == "ExaMiniMD":
@@ -608,18 +638,11 @@ def generateTest(app, prod, index):
 
     # Get the full command, with executable and arguments.
     command = getCommand(app, params)
+    # Set the command in the parameters.
+    # Everything else was set earlier.
+    scriptParams["command"] = command
 
     if SYSTEM == "voltrino-int":
-        # These are the defaults right now.
-        # TODO: Consider adjusting these and treating them as a separate set of parameters.
-        scriptParams = {"app": app,
-                        "command": command,
-                        "nodes": 4,
-                        "tasks": 32}
-        # nekbone is limited to 10 processors. It gets different rules.
-        if app == "nekbone":
-            scriptParams["nodes"] = 1
-            scriptParams["tasks"] = 10
         # Generate the SLURM script contents.
         SLURMString = makeSLURMScript(scriptParams)
         # Save the contents to an appropriately named file.
@@ -703,6 +726,8 @@ def finishJobs(lazy=False):
                 # Parse the output.
                 features = scrapeOutput(
                     output, activeJobs[job]["app"], activeJobs[job]["index"])
+                # Save the output of this job to file.
+                appendTest(activeJobs[job]["app"], activeJobs[job]["index"])
                 # The job has been parsed. Remove it from the list.
                 activeJobs.pop(job)
                 # We successfully finished a job.
@@ -748,21 +773,23 @@ def adjustParams(startApp="", startIdx=0):
             # Skip iterations until we reach the target starting index.
             if startIdx > index:
                 continue
+            # TODO: Update the index to support resuming tests.
             generateTest(app, prod, index)
+            # Try to finish jobs part-way.
+            finishJobs(lazy=True)
         if startIdx != 0:
             # Ensure subsequent loops start at the beginning.
             startIdx = 0
 
     finishJobs()
 
+    # Legacy DataFrame conversion. Used to diagnose issues compared with my own attempts at writing to a CSV.
     # Convert each app dictionary to a DataFrame.
-    # TODO: Append to the CSV as jobs complete. This way, we don't have to worry about losing everything if the script terminates early. This will also allow us to keep adding to our test dataset as we go.
-    # dataframe.to_csv("sales.csv", index=False, mode='a', header=False)
     for app in enabledApps:
         print("Saving DataFrame for app: " + app)
-        df[app] = pd.DataFrame(features[app])
+        df[app] = pd.DataFrame(features[app]).T
         # Save parameters and results to CSV for optional recovery.
-        df[app].to_csv("./tests/" + app + "/dataset.csv")
+        df[app].to_csv("./tests/" + app + "/datasetOriginal.csv")
 
 
 # Read an existing DataFrame back from a saved CSV.
@@ -779,6 +806,7 @@ def readDF():
 # Run random permutations of tests outside of the specific set of tests we have defined. This extra variety helps training.
 def randomTests():
     global terminate
+    signal.signal(signal.SIGINT, exit_gracefully)
     # Cancel via Ctrl+C.
     # While we have not canceled the test:
     while not terminate:
@@ -810,6 +838,10 @@ def randomTests():
                 params[param] = random.choice(values)
         # Run the test.
         generateTest(app, params, index)
+        # Try to finish jobs.
+        # If we want to terminate, we can't be lazy. Be sure all jobs complete.
+        finishJobs(lazy=(not terminate))
+    signal.signal(signal.SIGINT, original_sigint)
 
 
 # Train and test a regressor on a dataset.
@@ -923,7 +955,7 @@ def main():
         # Run tests at random indefinitely.
         randomTests()
     # Perform machine learning.
-    ML()
+    # ML()
 
 
 def exit_gracefully(signum, frame):
@@ -944,6 +976,5 @@ def exit_gracefully(signum, frame):
 if __name__ == "__main__":
     # store the original SIGINT handler.
     original_sigint = signal.getsignal(signal.SIGINT)
-    signal.signal(signal.SIGINT, exit_gracefully)
     # Run main.
     main()
