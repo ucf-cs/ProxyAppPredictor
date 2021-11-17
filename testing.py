@@ -751,35 +751,24 @@ def finishJobs(lazy=False):
 # This function tests the interactions between multiple parameters.
 # It makes multiple adjustments to important parameters in the default file.
 # The parameters enable resuming from an existing set of tests.
-def adjustParams(startApp="", startIdx=0):
+def adjustParams():
     global features
     global df
 
     # Loop through each Proxy App.
     for app in enabledApps:
-        # If a start app was specified.
-        if len(startApp) != 0:
-            # And the start app has not yet been reached.
-            if app != startApp:
-                continue
-            # One we reach the starting app.
-            else:
-                # Remove the requirement so subsequent apps will be checked.
-                startApp = ""
+        # Identify where we left off, in case we already have some results.
+        resumeIndex = getNextIndex(app)
         # Loop through each combination of parameter changes.
         # prod is the cartesian product of our adjusted parameters.
         for index, prod in enumerate((dict(zip(rangeParams[app], x)) for
                                       x in product(*rangeParams[app].values()))):
             # Skip iterations until we reach the target starting index.
-            if startIdx > index:
+            if resumeIndex > index:
                 continue
-            # TODO: Update the index to support resuming tests.
             generateTest(app, prod, index)
             # Try to finish jobs part-way.
             finishJobs(lazy=True)
-        if startIdx != 0:
-            # Ensure subsequent loops start at the beginning.
-            startIdx = 0
 
     finishJobs()
 
@@ -951,7 +940,7 @@ def main():
         readDF()
     else:
         # Run through all of the primary tests.
-        #adjustParams("", 0)
+        #adjustParams()
         # Run tests at random indefinitely.
         randomTests()
     # Perform machine learning.
