@@ -127,6 +127,7 @@ snapparamFile = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia.
                  'bzeroflag 0\n'
                  'quadraticflag 0\n')
 
+# TODO: Separate valid ranges from the range lists.
 # A set of sane defaults based on 3d Lennard-Jones melt (in.lj).
 defaultParams["ExaMiniMDbase"] = {"units": "lj",
                                   "lattice": "fcc",
@@ -149,7 +150,9 @@ defaultParams["ExaMiniMDbase"] = {"units": "lj",
                                   "thermo_rate": 10,
                                   "dt": 0.005,
                                   "comm_newton": "off",
-                                  "nsteps": 100}
+                                  "nsteps": 100,
+                                  "nodes": 4,
+                                  "tasks": 32}
 # TODO: Fix the snap case.
 defaultParams["ExaMiniMDsnap"] = {"units": "metal",
                                   "lattice": "sc",
@@ -172,20 +175,28 @@ defaultParams["ExaMiniMDsnap"] = {"units": "metal",
                                   "thermo_rate": 5,
                                   "dt": 0.0005,
                                   "comm_newton": "on",
-                                  "nsteps": 100}
+                                  "nsteps": 100,
+                                  "nodes": 4,
+                                  "tasks": 32}
 rangeParams["ExaMiniMD"] = {"force_type": ["lj/cut", "snap"],
                             "lattice_nx": [1, 5, 40, 100, 200, 500],
                             "dt": [0.0001, 0.0005, 0.001, 0.005, 1.0, 2.0],
-                            "nsteps": [0, 10, 100, 1000]}
+                            "nsteps": [0, 10, 100, 1000],
+                            "nodes": [1, 4],
+                            "tasks": [1, 32]}
 
 defaultParams["SWFFT"] = {"n_repetitions": 1,
                           "ngx": 512,
                           "ngy": None,
-                          "ngz": None}
+                          "ngz": None,
+                          "nodes": 4,
+                          "tasks": 32}
 rangeParams["SWFFT"] = {"n_repetitions": [1, 2, 4, 8, 16, 64],
                         "ngx": [256, 512, 1024, 2048],
                         "ngy": [None, 256, 512, 1024, 2048],
-                        "ngz": [None, 256, 512, 1024, 2048]}
+                        "ngz": [None, 256, 512, 1024, 2048],
+                        "nodes": [1, 4],
+                        "tasks": [1, 32]}
 
 defaultParams["nekbone"] = {"ifbrick": ".false.",
                             "iel0": 1,
@@ -199,7 +210,10 @@ defaultParams["nekbone"] = {"ifbrick": ".false.",
                             "npz": 0,
                             "mx": 0,
                             "my": 0,
-                            "mz": 0}
+                            "mz": 0,
+                            # nekbone is limited to 10 processors. It gets different rules.
+                            "nodes": 1,
+                            "tasks": 10}
 rangeParams["nekbone"] = {"ifbrick": [".false.", ".true."],
                           "iel0": [1, 50],
                           "ielN": [50],
@@ -207,10 +221,10 @@ rangeParams["nekbone"] = {"ifbrick": [".false.", ".true."],
                           "nx0": [1, 10],
                           "nxN": [10],
                           "nstep": [1, 2],
-                          "npx": [0, 1, 10],  # TODO: Get np first.
+                          "npx": [0, 1, 10],
                           "npy": [0, 1, 10],
                           "npz": [0, 1, 10],
-                          "mx": [0, 1, 10],  # TODO: Get nelt first.
+                          "mx": [0, 1, 10],
                           "my": [0, 1, 10],
                           "mz": [0, 1, 10]}
 
@@ -268,7 +282,9 @@ defaultParams["miniAMR"] = {"--help": False,
                             "size_z": 1.0,
                             "inc_x": 0.0,
                             "inc_y": 0.0,
-                            "inc_z": 0.0}
+                            "inc_z": 0.0,
+                            "nodes": 4,
+                            "tasks": 32}
 rangeParams["miniAMR"] = {"--help": [False],
                           "--nx": [10, 1000],
                           "--ny": [None],
@@ -324,7 +340,9 @@ rangeParams["miniAMR"] = {"--help": [False],
                           "size_z": [None],
                           "inc_x": [0.0, 1.0, -1.0],
                           "inc_y": [None],
-                          "inc_z": [None]}
+                          "inc_z": [None],
+                          "nodes": [1, 4],
+                          "tasks": [1, 32]}
 
 
 def paramsToString(params):
@@ -499,7 +517,7 @@ def scrapeOutput(output, app, index):
 def appendTest(app, test):
     global features
 
-    print("Appending test " + str(test) + " for app " + str(app))
+    # print("Appending test " + str(test) + " for app " + str(app))
     # The location of the output CSV.
     outputFile = "./tests/" + app + "/dataset.csv"
     # We only add the header if we are creating the file fresh.
@@ -520,14 +538,9 @@ def generateTest(app, prod, index):
     global features
 
     # These are the defaults right now.
-    # TODO: Consider adjusting these and treating them as a separate set of parameters.
     scriptParams = {"app": app,
-                    "nodes": 4,
-                    "tasks": 32}
-    # nekbone is limited to 10 processors. It gets different rules.
-    if app == "nekbone":
-        scriptParams["nodes"] = 1
-        scriptParams["tasks"] = 10
+                    "nodes": prod["nodes"],
+                    "tasks": prod["tasks"]}
 
     # Add any test skips and input hacks here.
     if app == "ExaMiniMD":
@@ -717,9 +730,9 @@ def finishJobs(lazy=False):
             # If the job is done.
             if "Invalid job id specified" in jobStatus \
                     or "kmlamar" not in jobStatus:
-                print("Parsing output from job: " + str(job)
-                      + "\tapp: " + activeJobs[job]["app"]
-                      + "\ttest: " + str(activeJobs[job]["index"]))
+                # print("Parsing output from job: " + str(job)
+                #       + "\tapp: " + activeJobs[job]["app"]
+                #       + "\ttest: " + str(activeJobs[job]["index"]))
                 # Open the file with the completed job.
                 with open(activeJobs[job]["path"] / ("slurm-" + str(job) + ".out"), "r") as f:
                     output = f.read()
@@ -940,7 +953,7 @@ def main():
         readDF()
     else:
         # Run through all of the primary tests.
-        #adjustParams()
+        adjustParams()
         # Run tests at random indefinitely.
         randomTests()
     # Perform machine learning.
@@ -967,3 +980,8 @@ if __name__ == "__main__":
     original_sigint = signal.getsignal(signal.SIGINT)
     # Run main.
     main()
+
+# NOTE: Refinements for testing.
+# Range: Min and max for numbers, all valid options for strings
+# Tests: A list of all valid tests, after invalid tests are filtered out.
+# Defaults: A set of sane default values. Not strictly needed. Can be useful to sweep along one parameter at a time.
