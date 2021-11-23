@@ -52,7 +52,8 @@ SYSTEM = platform.node()
 WAIT_TIME = 1
 # Used to choose which apps to test.
 # TODO: Fix miniAMR.
-enabledApps = rangeParams.keys()  # ["SWFFT", "nekbone", "miniAMR"]
+# rangeParams.keys() #["ExaMiniMD", "SWFFT", "nekbone", "miniAMR"]
+enabledApps = ["ExaMiniMD", "SWFFT", "nekbone"]
 # Whether or not to shortcut out tests that may be redundant or invalid.
 skipTests = True
 # A terminate indicator. Set to True to quit gracefully.
@@ -153,7 +154,7 @@ defaultParams["ExaMiniMDbase"] = {"units": "lj",
                                   "nsteps": 100,
                                   "nodes": 4,
                                   "tasks": 32}
-# TODO: Fix the snap case.
+# TODO: Fix the snap case for ExaMiniMD. Issues often occur when lattice_nx or dt are changed.
 defaultParams["ExaMiniMDsnap"] = {"units": "metal",
                                   "lattice": "sc",
                                   "lattice_constant": 3.316,
@@ -226,7 +227,9 @@ rangeParams["nekbone"] = {"ifbrick": [".false.", ".true."],
                           "npz": [0, 1, 10],
                           "mx": [0, 1, 10],
                           "my": [0, 1, 10],
-                          "mz": [0, 1, 10]}
+                          "mz": [0, 1, 10],
+                          "nodes": [1],
+                          "tasks": [10]}
 
 # NOTE: Several of these parameters are commented out as they are unsupported in the MPI version of the program.
 defaultParams["miniAMR"] = {"--help": False,
@@ -586,15 +589,21 @@ def generateTest(app, prod, index):
             if prod["--uniform_refine"] == 1 and prod["--refine_freq"] != 0:
                 skip = True
             if prod["--num_tsteps"] != None and prod["--time"] != None:
-                skip = True
-            if prod["load"] == "hilbert" and prod["--reorder"] == 1:
-                skip = True
+                #skip = True
+                if random.randint(0, 1):
+                    prod["--num_tsteps"] = None
+                else:
+                    prod["--time"] = None
+            # if prod["load"] == "hilbert" and prod["--reorder"] == 1:
+            #     skip = True
             if prod["--max_blocks"] < (prod["--init_x"] * prod["--init_y"] * prod["--init_z"]):
-                skip = True
-            if prod["load"] != "rcb" and prod["--change_dir"] == True:
-                skip = True
-            if prod["load"] != "rcb" and prod["--break_ties"] == True:
-                skip = True
+                prod["--max_blocks"] = prod["--init_x"] * \
+                    prod["--init_y"] * prod["--init_z"]
+                #skip = True
+            # if prod["load"] != "rcb" and prod["--change_dir"] == True:
+            #     skip = True
+            # if prod["load"] != "rcb" and prod["--break_ties"] == True:
+            #     skip = True
 
             if skip:
                 print("Skipping redundant test " + str(index))
@@ -813,11 +822,12 @@ def randomTests():
     # While we have not canceled the test:
     while not terminate:
         # Pick a random app.
-        app = random.choice(list(rangeParams))
+        app = random.choice(list(enabledApps))
         # Get the index to save the test files.
         index = getNextIndex(app)
         # A parameters list to populate.
         params = {}
+        # TODO: Ensure the parameters chosen are valid. Some apps are very picky.
         # For each parameter:
         for param, values in rangeParams[app].items():
             # If it is a number:
@@ -945,7 +955,31 @@ def ML():
         plt.show()
 
 
+def baseTest():
+    app = "ExaMiniMD"
+
+    params = copy.copy(defaultParams["ExaMiniMDsnap"])
+    params["lattice_nx"] = 1
+    generateTest(app, params, getNextIndex(app))
+
+    params = copy.copy(defaultParams["ExaMiniMDsnap"])
+    params["lattice_nx"] = 200
+    generateTest(app, params, getNextIndex(app))
+
+    params = copy.copy(defaultParams["ExaMiniMDsnap"])
+    params["dt"] = 0.0001
+    generateTest(app, params, getNextIndex(app))
+
+    params = copy.copy(defaultParams["ExaMiniMDsnap"])
+    params["dt"] = 2.0
+    generateTest(app, params, getNextIndex(app))
+
+    finishJobs()
+
+
 def main():
+    # baseTest()
+    # return
     fromCSV = False
 
     # Optionally start training from CSV immediately.
@@ -953,7 +987,7 @@ def main():
         readDF()
     else:
         # Run through all of the primary tests.
-        adjustParams()
+        # adjustParams()
         # Run tests at random indefinitely.
         randomTests()
     # Perform machine learning.
