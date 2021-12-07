@@ -2,6 +2,7 @@
 variety of Proxy Apps, both locally and on the Voltrino HPC testbed.
 """
 
+import concurrent.futures
 import copy
 import multiprocessing
 import numbers
@@ -17,18 +18,21 @@ import time
 from itertools import product
 from pathlib import Path
 
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import cross_val_score
-from sklearn.preprocessing import LabelEncoder
-from sklearn.neural_network import MLPRegressor
+from sklearn import preprocessing
+from sklearn import feature_selection
 from sklearn import linear_model
 from sklearn import svm
+from sklearn import metrics
+from sklearn import tree
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import train_test_split
+from sklearn.neural_network import MLPRegressor
 from sklearn.linear_model import SGDRegressor
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.cross_decomposition import PLSRegression
-from sklearn import tree
 import matplotlib.pyplot as plt
 
 pd.options.mode.chained_assignment = None
@@ -476,7 +480,7 @@ def getCommand(app, params):
             # Each of our standard parameters starts with "--".
             if param.startswith("--"):
                 # If the parameter is unset, don't add it to the args list.
-                if params[param] is False or params[param] is None or params[param] is '':
+                if params[param] == False or params[param] == None or params[param] == '':
                     continue
                 # If the parameter is a flag with no value, add it alone.
                 if params[param] is True:
@@ -810,7 +814,8 @@ def readDF():
     # For each app.
     for app in enabledApps:
         # Open the existing CSV.
-        df[app] = pd.read_csv("./tests/" + app + "/dataset.csv", index_col=0)
+        df[app] = pd.read_csv("./tests/" + app + "/dataset.csv",
+                              sep=",", header=0, index_col=0, engine="c", quotechar="\"")
     return
 
 
@@ -855,27 +860,101 @@ def randomTests():
         finishJobs(lazy=(not terminate))
     signal.signal(signal.SIGINT, original_sigint)
 
-
 # Train and test a regressor on a dataset.
 def regression(regressor, modelName, X, y):
-    print(modelName)
+    ret = str(modelName) + "\n"
     # Train Regressor.
     regressor = regressor.fit(X, y)
     # Run and report cross-validation accuracy.
-    scores = cross_val_score(regressor, X, y, cv=5)
-    print("Accuracy: " + str(scores.mean()))
-    return
+    scores = cross_val_score(regressor, X, y, cv=5,
+                             scoring="r2")
+    ret += " R^2: " + str(scores.mean()) + "\n"
+    scores = cross_val_score(regressor, X, y, cv=5,
+                             scoring="neg_root_mean_squared_error")
+    ret += " RMSE: " + str(scores.mean()) + "\n"
+
+    # Retrain on 4/5 of the data for plotting.
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42)
+    regressor = regressor.fit(X_train, y_train)
+    # Plot the results for each regressor.
+    y_pred = regressor.predict(X_test)
+    plt.figure()
+    plt.scatter(y_pred, y_test, s=20, c="black", label="data")
+    plt.xlabel("Predicted ("+str(modelName)+")")
+    plt.ylabel("Actual")
+    plt.legend()
+    plt.savefig("figures/"+str(modelName).replace(" ", "")+".svg")
+
+    print(str(modelName))
+    return ret
+
+
+def runRegressors(X, y, app=""):
+    # Make sure our features have the expected shape.
+    # Also useful to keep track of test sizes.
+    ret = str(X.shape) + "\n"
+
+    with concurrent.futures.ProcessPoolExecutor(max_workers=60) as executor:
+        futures = []
+
+        # Run our regressors.
+        forestRegressor = RandomForestRegressor()
+            futures.append(executor.submit(
+                regression, forestRegressor, "Random Forest Regressor "+app, X, y))
+
+        futures.append(executor.submit(
+            regression, linear_model.BayesianRidge(), "Bayesian Ridge "+app, X, y))
+
+        futures.append(executor.submit(regression, svm.SVR(),
+                       "Support Vector Regression RBF "+app, X, y))
+        for i in range(1, 3+1):
+            futures.append(executor.submit(regression, svm.SVR(
+                kernel="poly", degree=i), "Support Vector Regression poly "+str(i)+" "+app, X, y))
+        futures.append(executor.submit(regression, svm.SVR(
+            kernel="sigmoid"), "Support Vector Regression sigmoid "+app, X, y))
+
+        futures.append(executor.submit(regression, make_pipeline(StandardScaler(), SGDRegressor(
+            max_iter=1000, tol=1e-3)), "Linear Stochastic Gradient Descent Regressor "+app, X, y))
+
+        for i in range(1, 7+1):
+            futures.append(executor.submit(regression, KNeighborsRegressor(
+                n_neighbors=i), str(i)+" Nearest Neighbors Regressor "+app, X, y))
+
+        for i in range(1, 4+1):
+            futures.append(executor.submit(regression, PLSRegression(
+                n_components=i), str(i)+" PLS Regression "+app, X, y))
+
+        futures.append(executor.submit(
+            regression, tree.DecisionTreeRegressor(), "Decision Tree Regressor "+app, X, y))
+
+        for i in range(1, 10+1):
+            layers = tuple(100 for _ in range(i))
+            futures.append(executor.submit(regression, MLPRegressor(
+                activation="relu", hidden_layer_sizes=layers, random_state=1, max_iter=500), str(i)+" MLP Regressor relu "+app, X, y))
+            futures.append(executor.submit(regression, MLPRegressor(
+                activation="identity", hidden_layer_sizes=layers, random_state=1, max_iter=500), str(i)+" MLP Regressor identity "+app, X, y))
+            futures.append(executor.submit(regression, MLPRegressor(
+                activation="logistic", hidden_layer_sizes=layers, random_state=1, max_iter=500), str(i)+" MLP Regressor logistic "+app, X, y))
+            futures.append(executor.submit(regression, MLPRegressor(
+                activation="tanh", hidden_layer_sizes=layers, random_state=1, max_iter=500), str(i)+" MLP Regressor tanh "+app, X, y))
+
+        for future in futures:
+            ret += future.result()
+    return ret
 
 
 # Run machine learning on the DataFrames.
 def ML():
     global df
 
+    with concurrent.futures.ProcessPoolExecutor(max_workers=61) as executor:
+        futures = []
     for app in enabledApps:
         # Print the app name, so we keep track of which one is being worked on.
         print("\n" + app)
-        # Transpose the data.
-        X = df[app].T
+            futures.append(executor.submit(str, "\n" + app + "\n"))
+            X = df[app]
 
         # Special cases to fill in missing data.
         if app == "SWFFT":
@@ -904,7 +983,7 @@ def ML():
         X = X.replace('.true.', '1', regex=True)
         X = X.replace('.false.', '0', regex=True)
         # Convert non-numerics via an encoder.
-        le = LabelEncoder()
+            le = preprocessing.LabelEncoder()
         # Iterate over every cell.
         for col in X:
             for rowIndex, row in X[col].iteritems():
@@ -924,35 +1003,35 @@ def ML():
         # The testNum is also irrelevant for training purposes.
         X = X.drop(columns="testNum")
 
-        # Make sure our features have the expected shape.
-        # Also useful to keep track of test sizes.
-        print(X.shape)
+            # Standardization.
+            scaler = preprocessing.StandardScaler().fit(X)
+            X = scaler.transform(X)
+            # Feature selection. Removes useless columns to simplify the model.
+            sel = feature_selection.VarianceThreshold(threshold=0)
+            X = sel.fit_transform(X)
+            # Discretization. Buckets results to whole minutes like related works.
+            # y = y.apply(lambda x: int(x/60))
 
-        # Run our regressors.
-        # For now, these are a bunch of off-the-shelf regressors with default settings.
-        forestRegressor = RandomForestRegressor()
-        regression(forestRegressor, "Random Forest Regressor", X, y)
-        regression(linear_model.BayesianRidge(), "Bayesian Ridge", X, y)
-        regression(svm.SVR(), "Support Vector Regression", X, y)
-        regression(make_pipeline(StandardScaler(), SGDRegressor(
-            max_iter=1000, tol=1e-3)), "Linear Stochastic Gradient Descent Regressor", X, y)
-        regression(KNeighborsRegressor(n_neighbors=2),
-                   "K Nearest Neighbors Regressor", X, y)
-        regression(PLSRegression(n_components=2), "PLS Regression", X, y)
-        regression(tree.DecisionTreeRegressor(),
-                   "Decision Tree Regressor", X, y)
-        regression(MLPRegressor(random_state=1, max_iter=500),
-                   "MLP Regressor", X, y)
+            # Run regressors.
+            futures.append(executor.submit(runRegressors, X, y, app+" base"))
 
-        # Plot the results for the random forest regressor.
-        y_1 = forestRegressor.predict(X)
-        plt.figure()
-        plt.scatter(y_1, y, s=20, edgecolor="black",
-                    c="darkorange", label="data")
-        plt.xlabel("Predicted (RF)")
-        plt.ylabel("Actual")
-        plt.legend()
-        plt.show()
+            # Normalization.
+            X_norm = preprocessing.normalize(X, norm='l2')
+            futures.append(executor.submit(
+                runRegressors, X_norm, y, app+" norm"))
+
+            # Polynomial features.
+            poly = preprocessing.PolynomialFeatures(2)
+            X_poly_2 = poly.fit_transform(X)
+            futures.append(executor.submit(
+                runRegressors, X_poly_2, y, app+" poly"))
+
+        print('Writing output. Waiting for tests to complete.')
+        with open('MLoutput.txt', 'w') as f:
+            for future in futures:
+                result = future.result()
+                f.write(str(result))
+                print(result)
 
 
 def baseTest():
