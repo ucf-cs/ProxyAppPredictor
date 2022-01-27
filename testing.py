@@ -4,7 +4,7 @@ variety of Proxy Apps, both locally and on the Voltrino HPC testbed.
 
 import concurrent.futures
 import copy
-import multiprocessing
+import math
 import numbers
 import numpy as np
 import os
@@ -202,6 +202,251 @@ rangeParams["SWFFT"] = {"n_repetitions": [1, 2, 4, 8, 16, 64],
                         "ngz": [None, 256, 512, 1024, 2048],
                         "nodes": [1, 4],
                         "tasks": [1, 32]}
+
+defaultParams["sw4lite"] = {"grid": True,
+                            "gridny": None,
+                            "gridnx": None,
+                            "gridnz": None,
+                            "gridx": 1.27,
+                            "gridy": 1.27,
+                            "gridz": 19.99,
+                            "gridh": 0.003,
+                            "developer": True,
+                            "developercfl": None,
+                            "developercheckfornan": 0,
+                            "developerreporttiming": 1,
+                            "developertrace": None,
+                            "developerthblocki": None,
+                            "developerthblockj": None,
+                            "developerthblockk": None,
+                            "developercorder": 0,
+                            "topography": False,
+                            "topographyzmax": 1.0,
+                            "topographyorder": 6,
+                            "topographyzetabreak": None,
+                            "topographyinput": "gaussian",
+                            "topographyfile": None,
+                            "topographygaussianAmp": 0.1,
+                            "topographygaussianXc": -.6,
+                            "topographygaussianYc": 0.4,
+                            "topographygaussianLx": 0.15,
+                            "topographygaussianLy": 0.10,
+                            "topographyanalyticalMetric": None,
+                            "fileio": True,
+                            "fileiopath": "gaussianHill-h0p01",
+                            "fileioverbose": None,
+                            "fileioprintcycle": None,
+                            "fileiopfs": None,
+                            "fileionwriters": None,
+                            "time": True,
+                            # Note: Separate time instantiations in example file.
+                            "timet": 3.0,
+                            "timesteps": 5,
+                            "source": True,
+                            "sourcem0": None,
+                            "sourcex": 0.52,
+                            "sourcey": 0.48,
+                            "sourcez": None,
+                            "sourcedepth": 0.2,
+                            "sourceMxx": None,
+                            "sourceMxy": 0.87,
+                            "sourceMxz": None,
+                            "sourceMyy": None,
+                            "sourceMyz": None,
+                            "sourceMzz": None,
+                            "sourceFz": None,
+                            "sourceFx": None,
+                            "sourceFy": None,
+                            "sourcet0": 0.36,
+                            "sourcefreq": 16.6667,
+                            "sourcef0": None,
+                            "sourcetype": "Gaussian",
+                            "supergrid": True,
+                            "supergridgp": 30,
+                            "supergriddc": None,
+                            "testpointsource": False,
+                            "testpointsourcecp": None,
+                            "testpointsourcecs": None,
+                            "testpointsourcerho": None,
+                            "testpointsourcediractest": None,
+                            "testpointsourcehalfspace": None,
+                            "checkpoint": False,
+                            "checkpointtime": None,
+                            "checkpointtimeInterval": None,
+                            "checkpointcycle": None,
+                            "checkpointcycleInterval": None,
+                            "checkpointfile": None,
+                            "checkpointbufsize": None,
+                            "restart": False,
+                            "restartfile": None,
+                            "restartbufsize": None,
+                            "rec": True,
+                            "recx": 0.7,
+                            "recy": 0.6,
+                            "reclat": None,
+                            "reclon": None,
+                            "recz": None,
+                            "recdepth": 0,
+                            "rectopodepth": None,
+                            "recfile": "sta01",
+                            "recsta": None,
+                            "recnsew": None,
+                            "recwriteEvery": None,
+                            "recusgsformat": 1,
+                            "recsacformat": 0,
+                            "recvariables": None,
+                            "block": True,
+                            "blockrhograd": None,
+                            "blockvpgrad": None,
+                            "blockvsgrad": None,
+                            "blockvp": 2.0,
+                            "blockvs": 1.0,
+                            "blockrho": None,
+                            "blockr": 1.5,
+                            "blockQs": None,
+                            "blockQp": None,
+                            "blockabsdepth": None,
+                            "blockx1": None,
+                            "blockx2": None,
+                            "blocky1": None,
+                            "blocky2": None,
+                            "blockz1": None,
+                            "blockz2": None,
+                            "dgalerkin": None,
+                            "dgalerkinorder": None,
+                            "dgalerkinsinglemode": None}
+rangeParams["sw4lite"] = {  # Done
+                            "fileio": [False, True],
+                            "fileiopath": None,
+                            "fileioverbose": [0, 5],
+                            "fileioprintcycle": [1, 100],
+                            "fileiopfs": None,
+                            "fileionwriters": None,
+                            # Done
+                            "grid": [True],
+                            "gridny": [1, 100],
+                            "gridnx": [1, 100],
+                            "gridnz": [1, 100],
+                            "gridx": [1, 20],
+                            "gridy": [1, 20],
+                            "gridz": [1, 20],
+                            "gridh": [0.001, 1],
+                            # Done
+                            "time": [True],
+                            # Note: Multiple separate time instantiations in example file.
+                            "timet": [1.0, 5.0],
+                            "timesteps": [1, 10],
+                            # Done
+                            "supergrid": [True],
+                            "supergridgp": [5, 30, 100],
+                            "supergriddc": [0.01, 0.02, 0.05],
+                            # Done
+                            "source": [True],
+                            "sourcem0": [0.0, 1.0],
+                            "sourcex": [0.0, 1.0],
+                            "sourcey": [0.0, 1.0],
+                            "sourcez": [0.0, 1.0],
+                            "sourcedepth": [0.0, 1.0],
+                            "sourceMxx": [-1.0, 1.0],
+                            "sourceMxy": [-1.0, 1.0],
+                            "sourceMxz": [-1.0, 1.0],
+                            "sourceMyy": [-1.0, 1.0],
+                            "sourceMyz": [-1.0, 1.0],
+                            "sourceMzz": [-1.0, 1.0],
+                            "sourceFz": [-1.0, 1.0],
+                            "sourceFx": [-1.0, 1.0],
+                            "sourceFy": [-1.0, 1.0],
+                            "sourcet0": [0.01, 0.50],
+                            "sourcefreq": [0.1, 20.0],
+                            "sourcef0": [0.0, 5.0],
+                            "sourcetype": ["Ricker","Gaussian","Ramp","Triangle","Sawtooth","SmoothWave","Erf","GaussianInt","VerySmoothBump","RickerInt","Brune","BruneSmoothed","DBrune","GaussianWindow","Liu","Dirac","C6SmoothBump"],
+                            # Done
+                            "block": [False, True],
+                            "blockrhograd": [0.1, 2],
+                            "blockvpgrad": [0.1, 2],
+                            "blockvsgrad": [0.1, 2],
+                            "blockvp": [0.1,2.0],
+                            "blockvs": [0.1,2.0],
+                            "blockrho": [0.1,2.0],
+                            "blockr": [0.1,2.0],
+                            "blockQs": [None],
+                            "blockQp": [None],
+                            "blockabsdepth": [0, 1],
+                            # For these, the valid values are between 0 and some max value specified by the grid size.
+                            # Also, the 2s (max) must be larger than the 1s (min).
+                            "blockx1": [None],
+                            "blockx2": [None],
+                            "blocky1": [None],
+                            "blocky2": [None],
+                            "blockz1": [None],
+                            "blockz2": [None],
+                            # Done
+                            "topography": [False, True],
+                            "topographyzmax": [0.0,1.0],
+                            "topographyorder": [2,7],
+                            "topographyzetabreak": [None],
+                            "topographyinput": "gaussian",
+                            "topographyfile": [None], # Unused
+                            "topographygaussianAmp": [0.1,1.0],
+                            "topographygaussianXc": [0.1,0.9],
+                            "topographygaussianYc": [0.1,0.9],
+                            "topographygaussianLx": [0.1,1.0],
+                            "topographygaussianLy": [0.1,1.0],
+                            "topographyanalyticalMetric": [None],
+                            # Done
+                            "rec": [False, True],
+                            "recx": [None],
+                            "recy": [None],
+                            "reclat": [-90.0,90.0],
+                            "reclon": [-180.0,180.0],
+                            "recz": [None],
+                            "recdepth": [None],
+                            "rectopodepth": [None],
+                            "recfile": [None],
+                            "recsta": [None],
+                            "recnsew": [0, 1],
+                            "recwriteEvery": [100,10000],
+                            "recusgsformat": [0,1],
+                            "recsacformat": [0,1],
+                            "recvariables": ["displacement","velocity","div","curl","strains","displacementgradient"],
+                            # Done
+                            # No plans to test this.
+                            "checkpoint": [False],
+                            "checkpointtime": [None],
+                            "checkpointtimeInterval": [None],
+                            "checkpointcycle": [None],
+                            "checkpointcycleInterval": [None],
+                            "checkpointfile": [None],
+                            "checkpointbufsize": [None],
+                            # Done
+                            # No plans to test this.
+                            "restart": [False],
+                            "restartfile": [None],
+                            "restartbufsize": [None],
+                            # Done
+                            # No plans to test this.
+                            "dgalerkin": [False],
+                            "dgalerkinorder": [None],
+                            "dgalerkinsinglemode": [None],
+                            # Done
+                            # No plans to test this.
+                            "developer": [False],
+                            "developercfl": None,
+                            "developercheckfornan": [0],
+                            "developerreporttiming": [1],
+                            "developertrace": [None],
+                            "developerthblocki": [None],
+                            "developerthblockj": [None],
+                            "developerthblockk": [None],
+                            "developercorder": [0],
+                            # Done
+                            # No plans to test this.
+                            "testpointsource": [False],
+                            "testpointsourcecp": [None],
+                            "testpointsourcecs": [None],
+                            "testpointsourcerho": [None],
+                            "testpointsourcediractest": [None],
+                            "testpointsourcehalfspace": [None]}
 
 defaultParams["nekbone"] = {"ifbrick": ".false.",
                             "iel0": 1,
@@ -426,6 +671,19 @@ def makeFile(app, params):
         contents += "timestep {dt}\n".format_map(params)
         contents += "newton {comm_newton}\n".format_map(params)
         contents += "run {nsteps}\n".format_map(params)
+    elif app == "sw4lite":
+        contents += "# " + paramsToString(params) + "\n\n"
+        sections = ["fileio","grid","time","supergrid","source","block","topography","rec","checkpoint","restart","dgalerkin","developer","testpointsource"]
+        for section in params[sections]:
+            if params[section]:
+                contents += section + " "
+                for param in params:
+                    if not param.startswith(section):
+                        continue
+                    if param == section:
+                        continue
+                    contents += param.partition(section)[2] + "=" + params[param] + " "
+                contents += "\n"
     elif app == "nekbone":
         contents = ('{ifbrick} = ifbrick ! brick or linear geometry\n'
                     '{iel0} {ielN} {istep} = iel0,ielN(per proc),stride ! range of number of elements per proc.\n'
@@ -449,6 +707,11 @@ def getCommand(app, params):
             exe = "/projects/ovis/UCF/voltrino_run/SWFFT/SWFFT"
         else:
             exe = "../../../SWFFT"
+    elif app == "sw4lite":
+        if SYSTEM == "voltrino":
+            exe = "/projects/ovis/UCF/voltrino_run/sw4lite/sw4lite"
+        else:
+            exe = "../../../sw4lite"
     elif app == "nekbone":
         if SYSTEM == "voltrino-int":
             exe = "/projects/ovis/UCF/voltrino_run/nekbone/nekbone"
@@ -473,6 +736,8 @@ def getCommand(app, params):
         for param in params:
             params[param] = params[param] is not None and params[param] or ''
         args = "{n_repetitions} {ngx} {ngy} {ngz}".format_map(params)
+    elif app == "sw4lite":
+        args = "input.in"
     elif app == "nekbone":
         args = ""
     elif app == "miniAMR":
@@ -550,6 +815,7 @@ def generateTest(app, prod, index):
                     "tasks": prod["tasks"]}
 
     # Add any test skips and input hacks here.
+    # TODO: Replace this logic with getParams(app)
     if app == "ExaMiniMD":
         # A bit of a hack, but we don't really need to test all combinations of these.
         # Let lattice_nx dictate the values for lattice_ny and lattice_nz.
@@ -561,6 +827,8 @@ def generateTest(app, prod, index):
                 # Skip this test. It is invalid.
                 print("Skipping invalid test " + str(index))
                 return False
+    elif app == "sw4lite":
+        pass
     elif app == "nekbone":
         if skipTests:
             skip = False
@@ -648,6 +916,8 @@ def generateTest(app, prod, index):
         # Save the contents to an appropriately named file.
         if app == "ExaMiniMD":
             fileName = "input.lj"
+        elif app == "sw4lite":
+            fileName = "input.in"
         elif app == "nekbone":
             fileName = "data.rea"
         with open(testPath / fileName, "w+") as text_file:
@@ -819,6 +1089,289 @@ def readDF():
     return
 
 
+def randParam(app, param, values=''):
+    if values == '':
+        values = rangeParams[app][param]
+            # If it is a number:
+            if isinstance(values[-1], numbers.Number):
+                # Get lowest value.
+                minV = min(x for x in values if x is not None)
+                # Get highest value.
+                maxV = max(x for x in values if x is not None)
+                # Pick a random number between min and max to use as the parameter value.
+                if isinstance(values[-1], float):
+            return random.uniform(minV, maxV)
+                elif isinstance(values[-1], int):
+            return random.randint(minV, maxV)
+                else:
+                    print("Found a range with type" + str(type(values[-1])))
+            return random.randrange(minV, maxV)
+            # Else if it has no meaningful range (ex. str):
+            else:
+                # Pick one of the values at random.
+        return random.choice(values)
+
+# TODO: Ensure the parameters chosen are valid. Some apps are very picky.
+# TODO: Validate parameters, especially for miniAMR, before submitting.
+
+
+def getParams(app):
+    params = {}
+    if app == "sw4lite":
+        if random.choice(rangeParams[app]["fileio"]):
+            params["fileio"] = True
+            params["fileioverbose"] = randParam(app, "fileioverbose")
+            params["fileioprintcycle"] = randParam(app, "fileioprintcycle")
+        else:
+            params["fileio"] = False
+
+        params["grid"] = True
+        def computeEndGridPoint(maxval, h):
+            reltol = 1e-5
+            abstol = 1e-12
+            fnpts = round(maxval / h + 1)
+            if math.fabs((fnpts - 1) * h - maxval) < reltol * math.fabs(maxval) + abstol:
+                npts = int(fnpts)
+            else:
+                npts = int(fnpts) + 1
+            return float(npts)
+        if random.choice(range(2)):
+            params["gridnx"] = randParam(app, "gridnx")
+            params["gridny"] = randParam(app, "gridny")
+            params["gridnz"] = randParam(app, "gridnz")
+            params["gridh"] = randParam(app, "gridh")
+            h = params["gridh"]
+            xMax = (params["gridnx"]-1)*h
+            yMax = (params["gridny"]-1)*h
+            zMax = (params["gridnz"]-1)*h
+        else:
+            params["gridx"] = randParam(app, "gridx")
+            params["gridy"] = randParam(app, "gridy")
+            params["gridz"] = randParam(app, "gridz")
+            choice = random.choice(range(4))
+            if choice == 0:
+                params["gridh"] = randParam(app, "gridh")
+                h = params["gridh"]
+                xMax = (computeEndGridPoint(params["gridx"], h)-1)*h
+                yMax = (computeEndGridPoint(params["gridy"], h)-1)*h
+                zMax = (computeEndGridPoint(params["gridz"], h)-1)*h
+            elif choice == 1:
+                params["gridnx"] = randParam(app, "gridnx")
+                h = params["gridx"]/(params["gridnx"]-1)
+                xMax = (params["gridnx"]-1)*h
+                yMax = (computeEndGridPoint(params["gridy"], h)-1)*h
+                zMax = (computeEndGridPoint(params["gridz"], h)-1)*h
+            elif choice == 2:
+                params["gridny"] = randParam(app, "gridny")
+                h = params["gridy"]/(params["gridny"]-1)
+                xMax = (computeEndGridPoint(params["gridx"], h)-1)*h
+                yMax = (params["gridny"]-1)*h
+                zMax = (computeEndGridPoint(params["gridz"], h)-1)*h
+            elif choice == 3:
+                params["gridnz"] = randParam(app, "gridnz")
+                h = params["gridz"]/(params["gridnz"]-1)
+                xMax = (computeEndGridPoint(params["gridx"], h)-1)*h
+                yMax = (computeEndGridPoint(params["gridy"], h)-1)*h
+                zMax = (params["gridnz"]-1)*h
+
+        params["time"] = True
+        if random.choice(range(2)):
+            params["timet"] = randParam(app, "timet")
+        else:
+            params["timesteps"] = randParam(app, "timesteps")
+
+        if random.choice(rangeParams[app]["supergrid"]):
+            params["supergrid"] = True
+            params["supergridgp"] = randParam(app, "supergridgp")
+            params["supergriddc"] = randParam(app, "supergriddc")
+        else:
+            params["supergrid"] = False
+
+        # TODO: Support more than 1 call of this.
+        params["source"] = True
+        choice = random.choice(range(2))
+        if random.choice(range(2)):
+            params["sourcex"] = randParam(app, "sourcex", [0.0, xMax])
+            params["sourcey"] = randParam(app, "sourcey", [0.0, yMax])
+        else:
+            params["sourcex"] = randParam(app, "sourcex", [0.0, xMax])
+            params["sourcey"] = randParam(app, "sourcey", [0.0, yMax])
+        if random.choice(range(2)):
+            params["sourcez"] = randParam(app, "sourcez", [0.0, zMax])
+        else:
+            params["sourcedepth"] = randParam(app, "sourcedepth", [0.0, zMax])
+        if random.choice(range(2)):
+            if random.choice(range(2)):
+                params["sourcefx"] = randParam(app, "sourcefx")
+            if random.choice(range(2)):
+                params["sourcefy"] = randParam(app, "sourcefy")
+            if random.choice(range(2)):
+                params["sourcefz"] = randParam(app, "sourcefz")
+            if "sourcefx" not in params and \
+               "sourcefy" not in params and \
+               "sourcefz" not in params:
+                choice = random.choice(range(3))
+                if choice == 0:
+                    params["sourcefx"] = randParam(app, "sourcefx")
+                elif choice == 1:
+                    params["sourcefy"] = randParam(app, "sourcefy")
+                elif choice == 2:
+                    params["sourcefz"] = randParam(app, "sourcefz")
+            if random.choice(range(2)):
+                params["sourcef0"] = randParam(app, "sourcef0")
+        else:
+            if random.choice(range(2)):
+                params["sourceMxx"] = randParam(app, "sourceMxx")
+            if random.choice(range(2)):
+                params["sourceMxy"] = randParam(app, "sourceMxy")
+            if random.choice(range(2)):
+                params["sourceMxz"] = randParam(app, "sourceMxz")
+            if random.choice(range(2)):
+                params["sourceMyy"] = randParam(app, "sourceMyy")
+            if random.choice(range(2)):
+                params["sourceMyz"] = randParam(app, "sourceMyz")
+            if random.choice(range(2)):
+                params["sourceMzz"] = randParam(app, "sourceMzz")
+            if "sourceMxx" not in params and \
+               "sourceMxy" not in params and \
+               "sourceMxz" not in params and \
+               "sourceMyy" not in params and \
+               "sourceMyz" not in params and \
+               "sourceMzz" not in params:
+                choice = random.choice(range(6))
+                if choice == 0:
+                    params["sourceMxx"] = randParam(app, "sourceMxx")
+                elif choice == 1:
+                    params["sourceMxy"] = randParam(app, "sourceMxy")
+                elif choice == 2:
+                    params["sourceMxz"] = randParam(app, "sourceMxz")
+                elif choice == 3:
+                    params["sourceMyy"] = randParam(app, "sourceMyy")
+                elif choice == 4:
+                    params["sourceMyz"] = randParam(app, "sourceMyz")
+                elif choice == 5:
+                    params["sourceMzz"] = randParam(app, "sourceMzz")
+            if random.choice(range(2)):
+                params["sourcem0"] = randParam(app, "sourcem0")
+        params["type"] = randParam(app, "type")
+        params["sourcet0"] = randParam(app, "sourcet0")
+        if params["type"] != "Dirac":
+            params["sourcefreq"] = randParam(app, "sourcefreq")
+
+        if random.choice(rangeParams[app]["topography"]):
+            params["topography"] = True
+            params["topographyinput"] = randParam(app, "topographyinput")
+            params["topographyzmax"] = randParam(app, "topographyzmax")
+            params["topographygaussianAmp"] = randParam(app, "topographygaussianAmp")
+            params["topographygaussianXc"] = randParam(app, "topographygaussianXc")
+            params["topographygaussianYc"] = randParam(app, "topographygaussianYc")
+            params["topographygaussianLx"] = randParam(app, "topographygaussianLx")
+            params["topographygaussianLy"] = randParam(app, "topographygaussianLy")
+            params["topographyzetabreak"] = randParam(app, "topographyzetabreak")
+            params["topographyorder"] = randParam(app, "topographyorder")
+            params["topographyfile"] = randParam(app, "topographyfile")
+            params["topographyanalyticalMetric"] = randParam(app, "topographyanalyticalMetric")
+        else:
+            params["topography"] = False
+
+        if random.choice(rangeParams[app]["block"]):
+            params["block"] = True
+            params["blockvp"] = randParam(app, "blockvp")
+            params["blockvs"] = randParam(app, "blockvs")
+            if random.choice(range(2)):
+                params["blockrho"] = randParam(app, "blockrho")
+            else:
+                params["blockr"] = randParam(app, "blockr")
+            if random.choice(range(2)):
+                params["blockx1"] = randParam(app, "blockx1", [0.0, xMax])
+                params["blockx2"] = randParam(app, "blockx2", [0.0, xMax])
+                if params["blockx1"] > params["blockx2"]:
+                    # Swap
+                    tmp = params["blockx1"]
+                    params["blockx1"] = params["blockx2"]
+                    params["blockx2"] = tmp
+            if random.choice(range(2)):
+                params["blocky1"] = randParam(app, "blocky1", [0.0, yMax])
+                params["blocky2"] = randParam(app, "blocky2", [0.0, yMax])
+                if params["blocky1"] > params["blocky2"]:
+                    # Swap
+                    tmp = params["blocky1"]
+                    params["blocky1"] = params["blocky2"]
+                    params["blocky2"] = tmp
+            if random.choice(range(2)):
+                params["blockz1"] = randParam(app, "blockz1", [0.0, zMax])
+                params["blockz2"] = randParam(app, "blockz2", [0.0, zMax])
+                if params["blockz1"] > params["blockz2"]:
+                    # Swap
+                    tmp = params["blockz1"]
+                    params["blockz1"] = params["blockz2"]
+                    params["blockz2"] = tmp
+            if "topography" in params:
+                params["blockabsdepth"] = randParam(app, "blockabsdepth")
+            if random.choice(range(2)):
+                params["blockrhograd"] = randParam(app, "blockrhograd")
+            if random.choice(range(2)):
+                params["blockvpgrad"] = randParam(app, "blockvpgrad")
+            if random.choice(range(2)):
+                params["blockvsgrad"] = randParam(app, "blockvsgrad")
+        else:
+            params["block"] = False
+
+        if random.choice(rangeParams[app]["rec"]):
+            params["rec"] = True
+            if random.choice(range(2)):
+                params["recx"] = randParam(app, "recx", [0.0, xMax])
+                params["recy"] = randParam(app, "recy", [0.0, yMax])
+            else:
+                params["reclat"] = randParam(app, "reclat")
+                params["reclon"] = randParam(app, "reclon")
+            choice = random.choice(range(3))
+            if choice == 0:
+                params["recz"] = randParam(app, "recz", [0.0, zMax])
+            elif choice == 1:
+                params["recdepth"] = randParam(app, "recdepth", [0.0, zMax])
+            elif choice == 2:
+                params["rectopodepth"] = randParam(app, "rectopodepth", [0.0, zMax])
+            params["recfile"] = randParam(app, "recfile")
+            params["recsta"] = randParam(app, "recsta")
+            params["recnsew"] = randParam(app, "recnsew")
+            params["recwriteEvery"] = randParam(app, "recwriteEvery")
+            if random.choice(range(2)):
+                params["recusgsformat"] = 1
+                params["recsacformat"] = 0
+            else:
+                params["recusgsformat"] = 0
+                params["recsacformat"] = 1
+            params["recvariables"] = randParam(app, "recvariables")
+        else:
+            params["rec"] = False
+
+    # The default case just picks parameters at random within a range.
+    else:
+        # For each parameter:
+        for param, values in rangeParams[app].items():
+            params[param] = randParam(app, param)
+            # # If it is a number:
+            # if isinstance(values[-1], numbers.Number):
+            #     # Get lowest value.
+            #     minV = min(x for x in values if x is not None)
+            #     # Get highest value.
+            #     maxV = max(x for x in values if x is not None)
+            #     # Pick a random number between min and max to use as the parameter value.
+            #     if isinstance(values[-1], float):
+            #         params[param] = random.uniform(minV, maxV)
+            #     elif isinstance(values[-1], int):
+            #         params[param] = random.randint(minV, maxV)
+            #     else:
+            #         print("Found a range with type" + str(type(values[-1])))
+            #         params[param] = random.randrange(minV, maxV)
+            # # Else if it has no meaningful range (ex. str):
+            # else:
+            #     # Pick one of the values at random.
+            #     params[param] = random.choice(values)
+    return params
+
+
 # Run random permutations of tests outside of the specific set of tests we have defined. This extra variety helps training.
 def randomTests():
     global terminate
@@ -830,29 +1383,8 @@ def randomTests():
         app = random.choice(list(enabledApps))
         # Get the index to save the test files.
         index = getNextIndex(app)
-        # A parameters list to populate.
-        params = {}
-        # TODO: Ensure the parameters chosen are valid. Some apps are very picky.
-        # For each parameter:
-        for param, values in rangeParams[app].items():
-            # If it is a number:
-            if isinstance(values[-1], numbers.Number):
-                # Get lowest value.
-                minV = min(x for x in values if x is not None)
-                # Get highest value.
-                maxV = max(x for x in values if x is not None)
-                # Pick a random number between min and max to use as the parameter value.
-                if isinstance(values[-1], float):
-                    params[param] = random.uniform(minV, maxV)
-                elif isinstance(values[-1], int):
-                    params[param] = random.randint(minV, maxV)
-                else:
-                    print("Found a range with type" + str(type(values[-1])))
-                    params[param] = random.randrange(minV, maxV)
-            # Else if it has no meaningful range (ex. str):
-            else:
-                # Pick one of the values at random.
-                params[param] = random.choice(values)
+        # Get the parameters.
+        params = getParams(app)
         # Run the test.
         generateTest(app, params, index)
         # Try to finish jobs.
