@@ -56,8 +56,8 @@ SYSTEM = platform.node()
 WAIT_TIME = 1
 # Used to choose which apps to test.
 # TODO: Fix miniAMR.
-# rangeParams.keys() #["ExaMiniMD", "SWFFT", "nekbone", "miniAMR"]
-enabledApps = ["ExaMiniMD", "SWFFT", "nekbone"]
+# rangeParams.keys() #["ExaMiniMD", "SWFFT", "sw4lite", "nekbone", "miniAMR"]
+enabledApps = rangeParams.keys()
 # Whether or not to shortcut out tests that may be redundant or invalid.
 skipTests = True
 # A terminate indicator. Set to True to quit gracefully.
@@ -185,6 +185,7 @@ defaultParams["ExaMiniMDsnap"] = {"units": "metal",
                                   "tasks": 32}
 rangeParams["ExaMiniMD"] = {"force_type": ["lj/cut", "snap"],
                             "lattice_nx": [1, 5, 40, 100, 200, 500],
+                            # TODO: Bias to smaller values of dt. Closer to baseline value.
                             "dt": [0.0001, 0.0005, 0.001, 0.005, 1.0, 2.0],
                             "nsteps": [0, 10, 100, 1000],
                             "nodes": [1, 4],
@@ -197,6 +198,7 @@ defaultParams["SWFFT"] = {"n_repetitions": 1,
                           "nodes": 4,
                           "tasks": 32}
 rangeParams["SWFFT"] = {"n_repetitions": [1, 2, 4, 8, 16, 64],
+                        # TODO: Constrain to powers of 2 for random selection of these dimensions.
                         "ngx": [256, 512, 1024, 2048],
                         "ngy": [None, 256, 512, 1024, 2048],
                         "ngz": [None, 256, 512, 1024, 2048],
@@ -314,14 +316,16 @@ defaultParams["sw4lite"] = {"grid": True,
                             "blockz2": None,
                             "dgalerkin": None,
                             "dgalerkinorder": None,
-                            "dgalerkinsinglemode": None}
+                            "dgalerkinsinglemode": None,
+                            "nodes": 4,
+                            "tasks": 32}
 rangeParams["sw4lite"] = {  # Done
                             "fileio": [False, True],
-                            "fileiopath": None,
+                            "fileiopath": [None],
                             "fileioverbose": [0, 5],
                             "fileioprintcycle": [1, 100],
-                            "fileiopfs": None,
-                            "fileionwriters": None,
+                            "fileiopfs": [None],
+                            "fileionwriters": [None],
                             # Done
                             "grid": [True],
                             "gridny": [1, 100],
@@ -431,7 +435,7 @@ rangeParams["sw4lite"] = {  # Done
                             # Done
                             # No plans to test this.
                             "developer": [False],
-                            "developercfl": None,
+                            "developercfl": [None],
                             "developercheckfornan": [0],
                             "developerreporttiming": [1],
                             "developertrace": [None],
@@ -446,7 +450,9 @@ rangeParams["sw4lite"] = {  # Done
                             "testpointsourcecs": [None],
                             "testpointsourcerho": [None],
                             "testpointsourcediractest": [None],
-                            "testpointsourcehalfspace": [None]}
+                            "testpointsourcehalfspace": [None],
+                            "nodes": [1, 4],
+                            "tasks": [1, 32]}
 
 defaultParams["nekbone"] = {"ifbrick": ".false.",
                             "iel0": 1,
@@ -596,7 +602,9 @@ rangeParams["miniAMR"] = {"--help": [False],
                           "nodes": [1, 4],
                           "tasks": [1, 32]}
 
-
+# Convert the parameters list to a string.
+# Used as comments on input files to make the parameters used clear.
+# TODO: Remove/ignore this for deep learning.
 def paramsToString(params):
     string = ""
     for param in params:
@@ -605,7 +613,7 @@ def paramsToString(params):
     return string
 
 
-# Get the next unused index of the associated app.
+# Get the next unused test index of the associated app.
 # Enables extended testing.
 def getNextIndex(app):
     try:
@@ -674,15 +682,17 @@ def makeFile(app, params):
     elif app == "sw4lite":
         contents += "# " + paramsToString(params) + "\n\n"
         sections = ["fileio","grid","time","supergrid","source","block","topography","rec","checkpoint","restart","dgalerkin","developer","testpointsource"]
-        for section in params[sections]:
+        for section in sections:
             if params[section]:
-                contents += section + " "
+                contents += str(section) + " "
                 for param in params:
                     if not param.startswith(section):
                         continue
+                    if param == None:
+                        continue
                     if param == section:
                         continue
-                    contents += param.partition(section)[2] + "=" + params[param] + " "
+                    contents += str(param.partition(section)[2]) + "=" + str(params[param]) + " "
                 contents += "\n"
     elif app == "nekbone":
         contents = ('{ifbrick} = ifbrick ! brick or linear geometry\n'
@@ -725,12 +735,7 @@ def getCommand(app, params):
 
     args = ""
     if app == "ExaMiniMD":
-        if SYSTEM == "voltrino-int":
-            thread = 1
-        else:
-            thread = multiprocessing.cpu_count()
-        args = "-il input.lj --comm-type MPI --kokkos-threads={}".format(
-            thread)
+        args = "-il input.lj"
     elif app == "SWFFT":
         # Locally adjust the params list to properly handle None.
         for param in params:
@@ -760,8 +765,7 @@ def getCommand(app, params):
         # Create the number of objects we need to specify.
         for _ in range(params["--num_objects"]):
             # Fill in each of these arguments.
-            args += "--object {type} {bounce} {center_x} {center_y} {center_z} {movement_x} {movement_y} {movement_z} {size_x} {size_y} {size_z} {inc_x} {inc_y} {inc_z} ".format_map(
-                params)
+            args += "--object {type} {bounce} {center_x} {center_y} {center_z} {movement_x} {movement_y} {movement_z} {size_x} {size_y} {size_z} {inc_x} {inc_y} {inc_z} ".format_map(params)
 
     # Assemble the whole command.
     command = exe + " " + args
@@ -883,6 +887,7 @@ def generateTest(app, prod, index):
 
     # Get the default parameters, which we will adjust.
     # ExaMiniMD uses multiple sets of sane defaults based on force type.
+    # TODO: Adjust ExaMiniMD to use different ranges for different test types.
     if app == "ExaMiniMD":
         if prod["force_type"] == "lj/cut":
             params = copy.copy(defaultParams[app + "base"])
@@ -1074,7 +1079,7 @@ def adjustParams():
         print("Saving DataFrame for app: " + app)
         df[app] = pd.DataFrame(features[app]).T
         # Save parameters and results to CSV for optional recovery.
-        df[app].to_csv("./tests/" + app + "/datasetOriginal.csv")
+        df[app].to_csv("./tests/" + app + "/datasetClassic.csv")
 
 
 # Read an existing DataFrame back from a saved CSV.
@@ -1092,29 +1097,28 @@ def readDF():
 def randParam(app, param, values=''):
     if values == '':
         values = rangeParams[app][param]
-            # If it is a number:
-            if isinstance(values[-1], numbers.Number):
-                # Get lowest value.
-                minV = min(x for x in values if x is not None)
-                # Get highest value.
-                maxV = max(x for x in values if x is not None)
-                # Pick a random number between min and max to use as the parameter value.
-                if isinstance(values[-1], float):
+    # If it is a number:
+    if isinstance(values[-1], numbers.Number):
+        # Get the lowest value.
+        minV = min(x for x in values if x is not None)
+        # Get the highest value.
+        maxV = max(x for x in values if x is not None)
+        # Pick a random number between min and max to use as the parameter value.
+        if isinstance(values[-1], float):
             return random.uniform(minV, maxV)
-                elif isinstance(values[-1], int):
+        elif isinstance(values[-1], int):
             return random.randint(minV, maxV)
-                else:
-                    print("Found a range with type" + str(type(values[-1])))
+        else:
+            print("Found a range with type" + str(type(values[-1])))
             return random.randrange(minV, maxV)
-            # Else if it has no meaningful range (ex. str):
-            else:
-                # Pick one of the values at random.
+    # Else if it has no meaningful range (ex. str):
+    else:
+        # Pick one of the values at random.
         return random.choice(values)
 
+# Get a random, valid test case for the given app.
 # TODO: Ensure the parameters chosen are valid. Some apps are very picky.
 # TODO: Validate parameters, especially for miniAMR, before submitting.
-
-
 def getParams(app):
     params = {}
     if app == "sw4lite":
@@ -1346,29 +1350,21 @@ def getParams(app):
         else:
             params["rec"] = False
 
+    # TODO: Handle conditional cases for each app here.
+    # elif app == "ExaMiniMD":
+    #     pass
+    # elif app == "SWFFT":
+    #     pass
+    # elif app == "nekbone":
+    #     pass
+    # elif app == "miniAMR":
+    #     pass
+
     # The default case just picks parameters at random within a range.
     else:
         # For each parameter:
         for param, values in rangeParams[app].items():
             params[param] = randParam(app, param)
-            # # If it is a number:
-            # if isinstance(values[-1], numbers.Number):
-            #     # Get lowest value.
-            #     minV = min(x for x in values if x is not None)
-            #     # Get highest value.
-            #     maxV = max(x for x in values if x is not None)
-            #     # Pick a random number between min and max to use as the parameter value.
-            #     if isinstance(values[-1], float):
-            #         params[param] = random.uniform(minV, maxV)
-            #     elif isinstance(values[-1], int):
-            #         params[param] = random.randint(minV, maxV)
-            #     else:
-            #         print("Found a range with type" + str(type(values[-1])))
-            #         params[param] = random.randrange(minV, maxV)
-            # # Else if it has no meaningful range (ex. str):
-            # else:
-            #     # Pick one of the values at random.
-            #     params[param] = random.choice(values)
     return params
 
 
@@ -1418,6 +1414,11 @@ def regression(regressor, modelName, X, y):
     plt.legend()
     plt.savefig("figures/"+str(modelName).replace(" ", "")+".svg")
 
+    print(X.columns)
+    print(regressor.feature_importances_)
+    tree.plot_tree(regressor)
+    plt.show()
+
     print(str(modelName))
     return ret
 
@@ -1427,49 +1428,43 @@ def runRegressors(X, y, app=""):
     # Also useful to keep track of test sizes.
     ret = str(X.shape) + "\n"
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=60) as executor:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:
         futures = []
 
         # Run our regressors.
-        forestRegressor = RandomForestRegressor()
-            futures.append(executor.submit(
-                regression, forestRegressor, "Random Forest Regressor "+app, X, y))
+        # forestRegressor = RandomForestRegressor()
+        # futures.append(executor.submit(
+        #     regression, forestRegressor, "Random Forest Regressor "+app, X, y))
 
-        futures.append(executor.submit(
-            regression, linear_model.BayesianRidge(), "Bayesian Ridge "+app, X, y))
+        # futures.append(executor.submit(
+        #     regression, linear_model.BayesianRidge(), "Bayesian Ridge "+app, X, y))
 
-        futures.append(executor.submit(regression, svm.SVR(),
-                       "Support Vector Regression RBF "+app, X, y))
-        for i in range(1, 3+1):
-            futures.append(executor.submit(regression, svm.SVR(
-                kernel="poly", degree=i), "Support Vector Regression poly "+str(i)+" "+app, X, y))
-        futures.append(executor.submit(regression, svm.SVR(
-            kernel="sigmoid"), "Support Vector Regression sigmoid "+app, X, y))
+        # futures.append(executor.submit(regression, svm.SVR(),
+        #                "Support Vector Regression RBF "+app, X, y))
+        # for i in range(1, 3+1):
+        #     futures.append(executor.submit(regression, svm.SVR(
+        #         kernel="poly", degree=i), "Support Vector Regression poly "+str(i)+" "+app, X, y))
+        # futures.append(executor.submit(regression, svm.SVR(
+        #     kernel="sigmoid"), "Support Vector Regression sigmoid "+app, X, y))
 
-        futures.append(executor.submit(regression, make_pipeline(StandardScaler(), SGDRegressor(
-            max_iter=1000, tol=1e-3)), "Linear Stochastic Gradient Descent Regressor "+app, X, y))
+        # futures.append(executor.submit(regression, make_pipeline(StandardScaler(), SGDRegressor(
+        #     max_iter=1000, tol=1e-3)), "Linear Stochastic Gradient Descent Regressor "+app, X, y))
 
-        for i in range(1, 7+1):
-            futures.append(executor.submit(regression, KNeighborsRegressor(
-                n_neighbors=i), str(i)+" Nearest Neighbors Regressor "+app, X, y))
+        # for i in range(1, 7+1):
+        #     futures.append(executor.submit(regression, KNeighborsRegressor(
+        #         n_neighbors=i), str(i)+" Nearest Neighbors Regressor "+app, X, y))
 
-        for i in range(1, 4+1):
-            futures.append(executor.submit(regression, PLSRegression(
-                n_components=i), str(i)+" PLS Regression "+app, X, y))
+        # for i in range(1, 4+1):
+        #     futures.append(executor.submit(regression, PLSRegression(
+        #         n_components=i), str(i)+" PLS Regression "+app, X, y))
 
         futures.append(executor.submit(
             regression, tree.DecisionTreeRegressor(), "Decision Tree Regressor "+app, X, y))
 
-        for i in range(1, 10+1):
-            layers = tuple(100 for _ in range(i))
-            futures.append(executor.submit(regression, MLPRegressor(
-                activation="relu", hidden_layer_sizes=layers, random_state=1, max_iter=500), str(i)+" MLP Regressor relu "+app, X, y))
-            futures.append(executor.submit(regression, MLPRegressor(
-                activation="identity", hidden_layer_sizes=layers, random_state=1, max_iter=500), str(i)+" MLP Regressor identity "+app, X, y))
-            futures.append(executor.submit(regression, MLPRegressor(
-                activation="logistic", hidden_layer_sizes=layers, random_state=1, max_iter=500), str(i)+" MLP Regressor logistic "+app, X, y))
-            futures.append(executor.submit(regression, MLPRegressor(
-                activation="tanh", hidden_layer_sizes=layers, random_state=1, max_iter=500), str(i)+" MLP Regressor tanh "+app, X, y))
+        # for i in range(1, 10+1):
+        #     layers = tuple(100 for _ in range(i))
+        #     futures.append(executor.submit(regression, MLPRegressor(
+        #         activation="relu", hidden_layer_sizes=layers, random_state=1, max_iter=500), str(i)+" MLP Regressor relu "+app, X, y))
 
         for future in futures:
             ret += future.result()
@@ -1480,83 +1475,90 @@ def runRegressors(X, y, app=""):
 def ML():
     global df
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=61) as executor:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:
         futures = []
-    for app in enabledApps:
-        # Print the app name, so we keep track of which one is being worked on.
-        print("\n" + app)
+        for app in enabledApps:
+            # Print the app name, so we keep track of which one is being worked on.
+            print("\n" + app)
             futures.append(executor.submit(str, "\n" + app + "\n"))
             X = df[app]
 
-        # Special cases to fill in missing data.
-        if app == "SWFFT":
-            X = X[X["ngy"].notnull()]
-            X = X[X["ngz"].notnull()]
-        #     print(X)
-        #     X["ngy"] = X["ngy"].fillna(X["ngx"])
-        #     X["ngz"] = X["ngz"].fillna(X["ngx"])
-        #     print(X)
+            if app == "ExaMiniMD":
+                X = X[X["force_type"] == "lj/cut"]
+                #X = X[X["force_type"]=="snap"]
 
-        # Use the error field to report simply whether or not we encountered an
-        # error. We can use this as a training feature.
-        if "error" in X.columns:
-            X["error"] = X["error"].notnull()
-            # Filter out errors.
-            # X = X[X["error"].isnull()]
-            # X = X.drop(columns="error")
-            # if X.shape[0] < 1:
-            #     print("All tests contained errors. Skipping...")
-            #     continue
-        # Simple replacements for base cases.
-        X = X.replace('on', '1', regex=True)
-        X = X.replace('off', '0', regex=True)
-        X = X.replace('true', '1', regex=True)
-        X = X.replace('false', '0', regex=True)
-        X = X.replace('.true.', '1', regex=True)
-        X = X.replace('.false.', '0', regex=True)
-        # Convert non-numerics via an encoder.
+            # Use the error field to report simply whether or not we encountered an
+            # error. We can use this as a training feature.
+            if "error" in X.columns:
+                X["error"] = X["error"].notnull()
+                # Filter out errors.
+                # X = X[X["error"].isnull()]
+                # X = X.drop(columns="error")
+                # if X.shape[0] < 1:
+                #     print("All tests contained errors. Skipping...")
+                #     continue
+            # Simple replacements for base cases.
+            X = X.replace('on', '1', regex=True)
+            X = X.replace('off', '0', regex=True)
+            X = X.replace('true', '1', regex=True)
+            X = X.replace('false', '0', regex=True)
+            X = X.replace('.true.', '1', regex=True)
+            X = X.replace('.false.', '0', regex=True)
+            # Convert non-numerics via an encoder.
             le = preprocessing.LabelEncoder()
-        # Iterate over every cell.
-        for col in X:
-            for rowIndex, row in X[col].iteritems():
-                try:
-                    # If it can be a float, make it a float.
-                    X[col][rowIndex] = float(X[col][rowIndex])
-                    # If the float is NaN (unacceptable to Sci-kit), make it -1.0 for now.
-                    if pd.isna(X[col][rowIndex]):
-                        X[col][rowIndex] = -1.0
-                except ValueError:
-                    # Otherwise, use an encoder to make it numeric.
-                    X[col] = X[col].astype(str)
-                    X[col] = le.fit_transform(X[col])
-        # The time taken should be an output, not an input.
-        y = X["timeTaken"].astype(float)
-        X = X.drop(columns="timeTaken")
-        # The testNum is also irrelevant for training purposes.
-        X = X.drop(columns="testNum")
+            # Iterate over every cell.
+            for col in X:
+                for rowIndex, row in X[col].iteritems():
+                    try:
+                        # If it can be a float, make it a float.
+                        X[col][rowIndex] = float(X[col][rowIndex])
+                        # If the float is NaN (unacceptable to Sci-kit), make it -1.0 for now.
+                        if pd.isna(X[col][rowIndex]):
+                            X[col][rowIndex] = -1.0
+                    except ValueError:
+                        # Otherwise, use an encoder to make it numeric.
+                        X[col] = X[col].astype(str)
+                        X[col] = le.fit_transform(X[col])
+            y = X["error"].astype(float)
+            # The time taken should be an output, not an input.
+            # y = X["timeTaken"].astype(float)
+            X = X.drop(columns="timeTaken")
+            # When predicting, we cannot know if the program crashed before it starts.
+            X = X.drop(columns="error")
+            # The testNum is also irrelevant for training purposes.
+            X = X.drop(columns="testNum")
 
-            # Standardization.
-            scaler = preprocessing.StandardScaler().fit(X)
-            X = scaler.transform(X)
-            # Feature selection. Removes useless columns to simplify the model.
-            sel = feature_selection.VarianceThreshold(threshold=0)
-            X = sel.fit_transform(X)
-            # Discretization. Buckets results to whole minutes like related works.
-            # y = y.apply(lambda x: int(x/60))
+            if app == "ExaMiniMD":
+                X = X.drop(columns="units")
+                X = X.drop(columns="lattice")
+                X = X.drop(columns="lattice_constant")
+                X = X.drop(columns="lattice_offset_x")
+                X = X.drop(columns="lattice_offset_y")
+                X = X.drop(columns="lattice_offset_z")
+                X = X.drop(columns="lattice_ny")
+                X = X.drop(columns="lattice_nz")
+                X = X.drop(columns="ntypes")
+                X = X.drop(columns="type")
+                X = X.drop(columns="mass")
+                X = X.drop(columns="force_cutoff")
+                X = X.drop(columns="temperature_target")
+                X = X.drop(columns="temperature_seed")
+                X = X.drop(columns="neighbor_skin")
+                X = X.drop(columns="comm_exchange_rate")
+                X = X.drop(columns="thermo_rate")
+                X = X.drop(columns="comm_newton")
+
+            # # Standardization.
+            # scaler = preprocessing.StandardScaler().fit(X)
+            # X = scaler.transform(X)
+            # # Feature selection. Removes useless columns to simplify the model.
+            # sel = feature_selection.VarianceThreshold(threshold=0)
+            # X = sel.fit_transform(X)
+            # # Discretization. Buckets results to whole minutes like related works.
+            # # y = y.apply(lambda x: int(x/60))
 
             # Run regressors.
             futures.append(executor.submit(runRegressors, X, y, app+" base"))
-
-            # Normalization.
-            X_norm = preprocessing.normalize(X, norm='l2')
-            futures.append(executor.submit(
-                runRegressors, X_norm, y, app+" norm"))
-
-            # Polynomial features.
-            poly = preprocessing.PolynomialFeatures(2)
-            X_poly_2 = poly.fit_transform(X)
-            futures.append(executor.submit(
-                runRegressors, X_poly_2, y, app+" poly"))
 
         print('Writing output. Waiting for tests to complete.')
         with open('MLoutput.txt', 'w') as f:
@@ -1565,7 +1567,8 @@ def ML():
                 f.write(str(result))
                 print(result)
 
-
+# Used to run a small set of hardcoded test cases.
+# Useful for debugging purposes.
 def baseTest():
     app = "ExaMiniMD"
 
@@ -1598,7 +1601,7 @@ def main():
         readDF()
     else:
         # Run through all of the primary tests.
-        # adjustParams()
+        adjustParams()
         # Run tests at random indefinitely.
         randomTests()
     # Perform machine learning.
@@ -1625,8 +1628,3 @@ if __name__ == "__main__":
     original_sigint = signal.getsignal(signal.SIGINT)
     # Run main.
     main()
-
-# NOTE: Refinements for testing.
-# Range: Min and max for numbers, all valid options for strings
-# Tests: A list of all valid tests, after invalid tests are filtered out.
-# Defaults: A set of sane default values. Not strictly needed. Can be useful to sweep along one parameter at a time.
