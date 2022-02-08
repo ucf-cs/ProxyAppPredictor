@@ -339,7 +339,7 @@ rangeParams["sw4lite"] = {  # Done
                             "gridx": [1, 20],
                             "gridy": [1, 20],
                             "gridz": [1, 20],
-                            "gridh": [0.001, 1],
+                            "gridh": [0.001, 1.0],
                             # Done
                             "time": [True],
                             # Note: Multiple separate time instantiations in example file.
@@ -371,13 +371,13 @@ rangeParams["sw4lite"] = {  # Done
                             "sourcetype": ["Ricker","Gaussian","Ramp","Triangle","Sawtooth","SmoothWave","Erf","GaussianInt","VerySmoothBump","RickerInt","Brune","BruneSmoothed","DBrune","GaussianWindow","Liu","Dirac","C6SmoothBump"],
                             # Done
                             "block": [False, True],
-                            "blockrhograd": [0.1, 2],
-                            "blockvpgrad": [0.1, 2],
-                            "blockvsgrad": [0.1, 2],
-                            "blockvp": [0.1,2.0],
-                            "blockvs": [0.1,2.0],
-                            "blockrho": [0.1,2.0],
-                            "blockr": [0.1,2.0],
+                            "blockrhograd": [0.1, 2.0],
+                            "blockvpgrad": [0.1, 2.0],
+                            "blockvsgrad": [0.1, 2.0],
+                            "blockvp": [0.1, 2.0],
+                            "blockvs": [0.1, 2.0],
+                            "blockrho": [0.1, 2.0],
+                            "blockr": [0.1, 2.0],
                             "blockQs": [None],
                             "blockQp": [None],
                             "blockabsdepth": [0, 1],
@@ -785,6 +785,9 @@ def scrapeOutput(output, app, index):
             features[app][index]["timeTaken"] = \
                 int(line[len("timeTaken = "):])
         if "error" in line:
+            # DEBUG: Ignore this error for now. Hopefully it isn't a problem.
+            if "sbatch: error: spank: /opt/ovis/lib64/ovis-ldms/libjobinfo_slurm.so: Plugin file not found" in line:
+                continue
             if "error" not in features[app][index].keys():
                 features[app][index]["error"] = ""
             features[app][index]["error"] += line + "\n"
@@ -955,6 +958,9 @@ def finishJobs(lazy=False):
                 # Parse the output.
                 features = scrapeOutput(
                     output, activeJobs[job]["app"], activeJobs[job]["index"])
+                # DEBUG: Report an error to screen.
+                if(features[activeJobs[job]["app"]][activeJobs[job]["index"]].has_key("error")):
+                    print(str(activeJobs[job]["app"]) + " " + str(activeJobs[job]["app"])+ " " + str(features[activeJobs[job]["app"]][activeJobs[job]["index"]]["error"]))
                 # Save the output of this job to file.
                 appendTest(activeJobs[job]["app"], activeJobs[job]["index"])
                 # The job has been parsed. Remove it from the list.
@@ -1204,21 +1210,21 @@ def getParams(app):
             params["sourcedepth"] = randParam(app, "sourcedepth", [0.0, zMax])
         if random.choice(range(2)):
             if random.choice(range(2)):
-                params["sourcefx"] = randParam(app, "sourcefx")
+                params["sourceFx"] = randParam(app, "sourceFx")
             if random.choice(range(2)):
-                params["sourcefy"] = randParam(app, "sourcefy")
+                params["sourceFy"] = randParam(app, "sourceFy")
             if random.choice(range(2)):
-                params["sourcefz"] = randParam(app, "sourcefz")
-            if "sourcefx" not in params and \
-               "sourcefy" not in params and \
-               "sourcefz" not in params:
+                params["sourceFz"] = randParam(app, "sourceFz")
+            if "sourceFx" not in params and \
+               "sourceFy" not in params and \
+               "sourceFz" not in params:
                 choice = random.choice(range(3))
                 if choice == 0:
-                    params["sourcefx"] = randParam(app, "sourcefx")
+                    params["sourceFx"] = randParam(app, "sourceFx")
                 elif choice == 1:
-                    params["sourcefy"] = randParam(app, "sourcefy")
+                    params["sourceFy"] = randParam(app, "sourceFy")
                 elif choice == 2:
-                    params["sourcefz"] = randParam(app, "sourcefz")
+                    params["sourceFz"] = randParam(app, "sourceFz")
             if random.choice(range(2)):
                 params["sourcef0"] = randParam(app, "sourcef0")
         else:
@@ -1255,9 +1261,9 @@ def getParams(app):
                     params["sourceMzz"] = randParam(app, "sourceMzz")
             if random.choice(range(2)):
                 params["sourcem0"] = randParam(app, "sourcem0")
-        params["type"] = randParam(app, "type")
+        params["sourcetype"] = randParam(app, "sourcetype")
         params["sourcet0"] = randParam(app, "sourcet0")
-        if params["type"] != "Dirac":
+        if params["sourcetype"] != "Dirac":
             params["sourcefreq"] = randParam(app, "sourcefreq")
 
         if random.choice(rangeParams[app]["topography"]):
@@ -1397,10 +1403,10 @@ def getParams(app):
 
         def factors(n):
             return set(functools.reduce(list.__add__, ([i, n//i] for i in range(1, int(n**0.5) + 1) if n % i == 0)))
-        procCount = {}
-        procCount.insert(factors(multiprocessing.cpu_count()), 0)
-        procCount.insert(factors(multiprocessing.cpu_count()/procCount[0]), 1)
-        procCount.insert(multiprocessing.cpu_count()/procCount[0]/procCount[1], 2)
+        procCount = []
+        procCount.append(random.choice(list(factors(multiprocessing.cpu_count()))))
+        procCount.append(random.choice(list(factors(multiprocessing.cpu_count()/procCount[0]))))
+        procCount.append(int(multiprocessing.cpu_count()/procCount[0]/procCount[1]))
         random.shuffle(procCount)
         params["--npx"] = procCount.pop()
         params["--npy"] = procCount.pop()
@@ -1702,7 +1708,7 @@ def main():
         readDF()
     else:
         # Run through all of the primary tests.
-        adjustParams()
+        # adjustParams()
         # Run tests at random indefinitely.
         randomTests()
     # Perform machine learning.
