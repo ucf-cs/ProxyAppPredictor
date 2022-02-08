@@ -4,8 +4,10 @@ variety of Proxy Apps, both locally and on the Voltrino HPC testbed.
 
 import concurrent.futures
 import copy
+import multiprocessing
 import math
 import numbers
+from re import X
 import numpy as np
 import os
 import pandas as pd
@@ -14,6 +16,7 @@ import random
 import signal
 import subprocess
 import time
+import functools
 
 from itertools import product
 from pathlib import Path
@@ -55,8 +58,7 @@ SYSTEM = platform.node()
 # Time to wait on SLURM, in seconds, to avoid a busy loop.
 WAIT_TIME = 1
 # Used to choose which apps to test.
-# TODO: Fix miniAMR.
-# rangeParams.keys() #["ExaMiniMD", "SWFFT", "sw4lite", "nekbone", "miniAMR"]
+# rangeParams.keys() #["ExaMiniMDbase", "ExaMiniMDsnap", "SWFFT", "sw4lite", "nekbone", "miniAMR"]
 enabledApps = rangeParams.keys()
 # Whether or not to shortcut out tests that may be redundant or invalid.
 skipTests = True
@@ -132,7 +134,6 @@ snapparamFile = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia.
                  'bzeroflag 0\n'
                  'quadraticflag 0\n')
 
-# TODO: Separate valid ranges from the range lists.
 # A set of sane defaults based on 3d Lennard-Jones melt (in.lj).
 defaultParams["ExaMiniMDbase"] = {"units": "lj",
                                   "lattice": "fcc",
@@ -158,6 +159,12 @@ defaultParams["ExaMiniMDbase"] = {"units": "lj",
                                   "nsteps": 100,
                                   "nodes": 4,
                                   "tasks": 32}
+rangeParams["ExaMiniMDbase"] = {"force_type": ["lj/cut"],
+                                "lattice_nx": [1, 5, 40, 100, 200, 500],
+                                "dt": [0.0001, 0.0005, 0.001, 0.005, 1.0, 2.0],
+                                "nsteps": [0, 10, 100, 1000],
+                                "nodes": [1, 4],
+                                "tasks": [1, 32]}
 # TODO: Fix the snap case for ExaMiniMD. Issues often occur when lattice_nx or dt are changed.
 defaultParams["ExaMiniMDsnap"] = {"units": "metal",
                                   "lattice": "sc",
@@ -183,13 +190,12 @@ defaultParams["ExaMiniMDsnap"] = {"units": "metal",
                                   "nsteps": 100,
                                   "nodes": 4,
                                   "tasks": 32}
-rangeParams["ExaMiniMD"] = {"force_type": ["lj/cut", "snap"],
-                            "lattice_nx": [1, 5, 40, 100, 200, 500],
-                            # TODO: Bias to smaller values of dt. Closer to baseline value.
-                            "dt": [0.0001, 0.0005, 0.001, 0.005, 1.0, 2.0],
-                            "nsteps": [0, 10, 100, 1000],
-                            "nodes": [1, 4],
-                            "tasks": [1, 32]}
+rangeParams["ExaMiniMDsnap"] = {"force_type": ["snap"],
+                                "lattice_nx": [1, 5, 40],
+                                "dt": [0.0001, 0.0005, 0.001],
+                                "nsteps": [0, 10, 100, 1000],
+                                "nodes": [1, 4],
+                                "tasks": [1, 32]}
 
 defaultParams["SWFFT"] = {"n_repetitions": 1,
                           "ngx": 512,
@@ -198,7 +204,6 @@ defaultParams["SWFFT"] = {"n_repetitions": 1,
                           "nodes": 4,
                           "tasks": 32}
 rangeParams["SWFFT"] = {"n_repetitions": [1, 2, 4, 8, 16, 64],
-                        # TODO: Constrain to powers of 2 for random selection of these dimensions.
                         "ngx": [256, 512, 1024, 2048],
                         "ngy": [None, 256, 512, 1024, 2048],
                         "ngz": [None, 256, 512, 1024, 2048],
@@ -568,7 +573,7 @@ rangeParams["miniAMR"] = {"--help": [False],
                           "--num_tsteps": [None, 20],
                           # Ignored if num_tsteps is used.
                           "--time": [None, 20],
-                          "--stages_per_ts": [0, 20],
+                          "--stages_per_ts": [1, 20],
                           "--permute": [True, False],
                           # "--blocking_send": [True, False],
                           "--code": [0, 1, 2],
@@ -647,7 +652,7 @@ def makeSLURMScript(f):
 
 def makeFile(app, params):
     contents = ""
-    if app == "ExaMiniMD":
+    if app.startswith("ExaMiniMD"):
         contents += "# " + paramsToString(params) + "\n\n"
         contents += "units {units}\n".format_map(params)
         contents += "atom_style atomic\n"
@@ -707,7 +712,7 @@ def getCommand(app, params):
     # Get the executable.
     # NOTE: Is there a better way than hardcoding these into the function?
     # Does it really matter anyway? I think not.
-    if app == "ExaMiniMD":
+    if app.startswith("ExaMiniMD"):
         if SYSTEM == "voltrino-int":
             exe = "/projects/ovis/UCF/voltrino_run/ExaMiniMD/ExaMiniMD"
         else:
@@ -734,7 +739,7 @@ def getCommand(app, params):
             exe = "../../../miniAMR.x"
 
     args = ""
-    if app == "ExaMiniMD":
+    if app.startswith("ExaMiniMD"):
         args = "-il input.lj"
     elif app == "SWFFT":
         # Locally adjust the params list to properly handle None.
@@ -818,85 +823,8 @@ def generateTest(app, prod, index):
                     "nodes": prod["nodes"],
                     "tasks": prod["tasks"]}
 
-    # Add any test skips and input hacks here.
-    # TODO: Replace this logic with getParams(app)
-    if app == "ExaMiniMD":
-        # A bit of a hack, but we don't really need to test all combinations of these.
-        # Let lattice_nx dictate the values for lattice_ny and lattice_nz.
-        prod["lattice_ny"] = prod["lattice_nx"]
-        prod["lattice_nz"] = prod["lattice_nx"]
-    elif app == "SWFFT":
-        if skipTests:
-            if prod["ngy"] == None and prod["ngz"] != None:
-                # Skip this test. It is invalid.
-                print("Skipping invalid test " + str(index))
-                return False
-    elif app == "sw4lite":
-        pass
-    elif app == "nekbone":
-        if skipTests:
-            skip = False
-            if prod["iel0"] > prod["ielN"]:
-                skip = True
-            if prod["nx0"] > prod["nxN"]:
-                skip = True
-            if skip:
-                print("Skipping invalid test " + str(index))
-                return False
-    elif app == "miniAMR":
-        prod["--ny"] = prod["--nx"]
-        prod["--nz"] = prod["--nx"]
-        prod["--init_y"] = prod["--init_x"]
-        prod["--init_z"] = prod["--init_x"]
-        prod["--npy"] = prod["--npx"]
-        prod["--npz"] = prod["--npx"]
-        prod["center_y"] = prod["center_x"]
-        prod["center_z"] = prod["center_x"]
-        prod["movement_y"] = prod["movement_x"]
-        prod["movement_z"] = prod["movement_x"]
-        prod["size_y"] = prod["size_x"]
-        prod["size_z"] = prod["size_x"]
-        prod["inc_y"] = prod["inc_x"]
-        prod["inc_z"] = prod["inc_x"]
-
-        # These cases are redundant because some parameters are ignored when others are set.
-        if skipTests:
-            skip = False
-            if prod["--uniform_refine"] == 1 and prod["--refine_freq"] != 0:
-                skip = True
-            if prod["--num_tsteps"] != None and prod["--time"] != None:
-                #skip = True
-                if random.randint(0, 1):
-                    prod["--num_tsteps"] = None
-                else:
-                    prod["--time"] = None
-            # if prod["load"] == "hilbert" and prod["--reorder"] == 1:
-            #     skip = True
-            if prod["--max_blocks"] < (prod["--init_x"] * prod["--init_y"] * prod["--init_z"]):
-                prod["--max_blocks"] = prod["--init_x"] * \
-                    prod["--init_y"] * prod["--init_z"]
-                #skip = True
-            # if prod["load"] != "rcb" and prod["--change_dir"] == True:
-            #     skip = True
-            # if prod["load"] != "rcb" and prod["--break_ties"] == True:
-            #     skip = True
-
-            if skip:
-                print("Skipping redundant test " + str(index))
-                return False
-
     # Get the default parameters, which we will adjust.
-    # ExaMiniMD uses multiple sets of sane defaults based on force type.
-    # TODO: Adjust ExaMiniMD to use different ranges for different test types.
-    if app == "ExaMiniMD":
-        if prod["force_type"] == "lj/cut":
-            params = copy.copy(defaultParams[app + "base"])
-        elif prod["force_type"] == "snap":
-            params = copy.copy(defaultParams[app + "snap"])
-        else:
-            params = copy.copy(defaultParams[app])
-    else:
-        params = copy.copy(defaultParams[app])
+    params = copy.copy(defaultParams[app])
     # Update the params based on our cartesian product.
     params.update(prod)
     # Add the test number to the list of params.
@@ -919,7 +847,7 @@ def generateTest(app, prod, index):
     # If a fileString was generated
     if fileString != "":
         # Save the contents to an appropriately named file.
-        if app == "ExaMiniMD":
+        if app.startswith("ExaMiniMD"):
             fileName = "input.lj"
         elif app == "sw4lite":
             fileName = "input.in"
@@ -928,7 +856,7 @@ def generateTest(app, prod, index):
         with open(testPath / fileName, "w+") as text_file:
             text_file.write(fileString)
 
-    if app == "ExaMiniMD" and params["force_type"] == "snap":
+    if app.startswith("ExaMiniMD") and params["force_type"] == "snap":
         # Copy in Ta06A.snap, Ta06A.snapcoeff, and Ta06A.snapparam.
         with open(testPath / "Ta06A.snap", "w+") as text_file:
             text_file.write(snapFile)
@@ -1058,6 +986,10 @@ def adjustParams():
 
     # Loop through each Proxy App.
     for app in enabledApps:
+        # Some apps are very particular.
+        # Don't bother with them and stick to randomly generated tests only.
+        if app == "sw4lite" or app == "miniAMR":
+            continue
         # Identify where we left off, in case we already have some results.
         resumeIndex = getNextIndex(app)
         # Loop through each combination of parameter changes.
@@ -1067,6 +999,70 @@ def adjustParams():
             # Skip iterations until we reach the target starting index.
             if resumeIndex > index:
                 continue
+            # Test skips and input hacks.
+            if app.startswith("ExaMiniMD"):
+                # A bit of a hack, but we don't really need to test all combinations of these.
+                # Let lattice_nx dictate the values for lattice_ny and lattice_nz.
+                prod["lattice_ny"] = prod["lattice_nx"]
+                prod["lattice_nz"] = prod["lattice_nx"]
+            elif app == "SWFFT":
+                if skipTests:
+                    if prod["ngy"] == None and prod["ngz"] != None:
+                        # Skip this test. It is invalid.
+                        print("Skipping invalid test " + str(index))
+                        continue
+            elif app == "nekbone":
+                if skipTests:
+                    skip = False
+                    if prod["iel0"] > prod["ielN"]:
+                        skip = True
+                    if prod["nx0"] > prod["nxN"]:
+                        skip = True
+                    if skip:
+                        print("Skipping invalid test " + str(index))
+                        continue
+            elif app == "miniAMR":
+                prod["--ny"] = prod["--nx"]
+                prod["--nz"] = prod["--nx"]
+                prod["--init_y"] = prod["--init_x"]
+                prod["--init_z"] = prod["--init_x"]
+                prod["--npy"] = prod["--npx"]
+                prod["--npz"] = prod["--npx"]
+                prod["center_y"] = prod["center_x"]
+                prod["center_z"] = prod["center_x"]
+                prod["movement_y"] = prod["movement_x"]
+                prod["movement_z"] = prod["movement_x"]
+                prod["size_y"] = prod["size_x"]
+                prod["size_z"] = prod["size_x"]
+                prod["inc_y"] = prod["inc_x"]
+                prod["inc_z"] = prod["inc_x"]
+
+                # These cases are redundant because some parameters are ignored when others are set.
+                if skipTests:
+                    skip = False
+                    if prod["--uniform_refine"] == 1 and prod["--refine_freq"] != 0:
+                        skip = True
+                    if prod["--num_tsteps"] != None and prod["--time"] != None:
+                        #skip = True
+                        if random.randint(0, 1):
+                            prod["--num_tsteps"] = None
+                        else:
+                            prod["--time"] = None
+                    # if prod["load"] == "hilbert" and prod["--reorder"] == 1:
+                    #     skip = True
+                    if prod["--max_blocks"] < (prod["--init_x"] * prod["--init_y"] * prod["--init_z"]):
+                        prod["--max_blocks"] = prod["--init_x"] * \
+                            prod["--init_y"] * prod["--init_z"]
+                        skip = True
+                    # if prod["load"] != "rcb" and prod["--change_dir"] == True:
+                    #     skip = True
+                    # if prod["load"] != "rcb" and prod["--break_ties"] == True:
+                    #     skip = True
+
+                    if skip:
+                        print("Skipping redundant test " + str(index))
+                        continue
+
             generateTest(app, prod, index)
             # Try to finish jobs part-way.
             finishJobs(lazy=True)
@@ -1117,10 +1113,12 @@ def randParam(app, param, values=''):
         return random.choice(values)
 
 # Get a random, valid test case for the given app.
-# TODO: Ensure the parameters chosen are valid. Some apps are very picky.
-# TODO: Validate parameters, especially for miniAMR, before submitting.
 def getParams(app):
     params = {}
+    # All jobs must set these.
+    params["nodes"] = randParam(app, "nodes")
+    params["tasks"] = randParam(app, "tasks")
+
     if app == "sw4lite":
         if random.choice(rangeParams[app]["fileio"]):
             params["fileio"] = True
@@ -1350,14 +1348,120 @@ def getParams(app):
         else:
             params["rec"] = False
 
+    elif app == "SWFFT":
+        params["n_repetitions"] = randParam(app, "n_repetitions")
+
+        # Confirm the number is a power of 2.
+        def isPow2(x):
+            return (x & (x-1) == 0) and x != 0
+        # Round up to the nearest power of 2.
+        def nextPow2(x):
+            return 1 if x == 0 else 2**(x - 1).bit_length()
+        if random.choice(range(2)):
+            params["ngx"] = randParam(app, "ngx")
+            if not isPow2(params["ngx"]):
+                params["ngx"] = nextPow2(params["ngx"])
+        else:
+            params["ngx"] = None
+        if params["ngx"] is None and random.choice(range(2)):
+            params["ngy"] = randParam(app, "ngy")
+            if not isPow2(params["ngy"]):
+                params["ngy"] = nextPow2(params["ngy"])
+        else:
+            params["ngy"] = None
+        if params["ngy"] is None and random.choice(range(2)):
+            params["ngz"] = randParam(app, "ngz")
+            if not isPow2(params["ngz"]):
+                params["ngz"] = nextPow2(params["ngz"])
+        else:
+            params["ngz"] = None
+
+    elif app == "miniAMR":
+        params["--help"] = None
+
+        params["--nx"] = randParam(app, "--nx")
+        if params["--nx"] % 2 != 0:
+            params["--nx"] += 1
+        params["--ny"] = randParam(app, "--nx")
+        if params["--ny"] % 2 != 0:
+            params["--ny"] += 1
+        params["--nz"] = randParam(app, "--nx")
+        if params["--nz"] % 2 != 0:
+            params["--nz"] += 1
+
+        params["--init_x"] = randParam(app, "--init_x")
+        params["--init_y"] = randParam(app, "--init_x")
+        params["--init_z"] = randParam(app, "--init_x")
+
+        params["--reorder"] = randParam(app, "--reorder")
+
+        def factors(n):
+            return set(functools.reduce(list.__add__, ([i, n//i] for i in range(1, int(n**0.5) + 1) if n % i == 0)))
+        procCount = {}
+        procCount.insert(factors(multiprocessing.cpu_count()), 0)
+        procCount.insert(factors(multiprocessing.cpu_count()/procCount[0]), 1)
+        procCount.insert(multiprocessing.cpu_count()/procCount[0]/procCount[1], 2)
+        random.shuffle(procCount)
+        params["--npx"] = procCount.pop()
+        params["--npy"] = procCount.pop()
+        params["--npz"] = procCount.pop()
+
+        params["--max_blocks"] = randParam(app, "--max_blocks")
+        if params["--max_blocks"] < params["--init_x"] * params["--init_y"] * params["--init_z"]:
+            params["--max_blocks"] = params["--init_x"] * params["--init_y"] * params["--init_z"]
+
+        params["--num_refine"] = randParam(app, "--num_refine")
+        params["--block_change"] = randParam(app, "--block_change")
+        
+        params["--uniform_refine"] = randParam(app, "--uniform_refine")
+        if params["--uniform_refine"] != 1:
+            params["--refine_freq"] = randParam(app, "--refine_freq")
+        else:
+            params["--refine_freq"] = None
+        
+        params["--inbalance"] = randParam(app, "--inbalance")
+        params["--lb_opt"] = randParam(app, "--lb_opt")
+
+        params["--num_vars"] = randParam(app, "--num_vars")
+        params["--comm_vars"] = randParam(app, "--comm_vars", [0, params["--num_vars"]])
+
+        if random.choice(range(2)):
+            params["--num_tsteps"] = randParam(app, "--num_tsteps")
+        else:
+            params["--time"] = randParam(app, "--time")
+
+        params["--stages_per_ts"] = randParam(app, "--stages_per_ts")
+        params["--permute"] = randParam(app, "--permute")
+        params["--code"] = randParam(app, "--code")
+        params["--checksum_freq"] = randParam(app, "--checksum_freq")
+        params["--stencil"] = random.choice(rangeParams["miniAMR"]["--stencil"])
+        params["--error_tol"] = randParam(app, "--error_tol")
+        params["--report_diffusion"] = randParam(app, "--report_diffusion")
+        params["--report_perf"] = randParam(app, "--report_perf")
+
+        params["--num_objects"] = randParam(app, "--num_objects")
+        if params["--num_objects"] > 0:
+            params["type"] = randParam(app, "type")
+            params["bounce"] = randParam(app, "bounce")
+            params["center_x"] = randParam(app, "center_x")
+            params["center_y"] = randParam(app, "center_x")
+            params["center_z"] = randParam(app, "center_x")
+            params["movement_x"] = randParam(app, "movement_x")
+            params["movement_y"] = randParam(app, "movement_x")
+            params["movement_z"] = randParam(app, "movement_x")
+            params["size_x"] = randParam(app, "size_x")
+            params["size_y"] = randParam(app, "size_x")
+            params["size_z"] = randParam(app, "size_x")
+            params["inc_x"] = randParam(app, "inc_x")
+            params["inc_y"] = randParam(app, "inc_x")
+            params["inc_z"] = randParam(app, "inc_x")
+
     # TODO: Handle conditional cases for each app here.
-    # elif app == "ExaMiniMD":
+    # elif app == "ExaMiniMDbase":
     #     pass
-    # elif app == "SWFFT":
+    # elif app = "ExaMiniMDsnap":
     #     pass
     # elif app == "nekbone":
-    #     pass
-    # elif app == "miniAMR":
     #     pass
 
     # The default case just picks parameters at random within a range.
@@ -1365,6 +1469,7 @@ def getParams(app):
         # For each parameter:
         for param, values in rangeParams[app].items():
             params[param] = randParam(app, param)
+    
     return params
 
 
@@ -1483,10 +1588,6 @@ def ML():
             futures.append(executor.submit(str, "\n" + app + "\n"))
             X = df[app]
 
-            if app == "ExaMiniMD":
-                X = X[X["force_type"] == "lj/cut"]
-                #X = X[X["force_type"]=="snap"]
-
             # Use the error field to report simply whether or not we encountered an
             # error. We can use this as a training feature.
             if "error" in X.columns:
@@ -1570,21 +1671,21 @@ def ML():
 # Used to run a small set of hardcoded test cases.
 # Useful for debugging purposes.
 def baseTest():
-    app = "ExaMiniMD"
+    app = "ExaMiniMDsnap"
 
-    params = copy.copy(defaultParams["ExaMiniMDsnap"])
+    params = copy.copy(defaultParams[app])
     params["lattice_nx"] = 1
     generateTest(app, params, getNextIndex(app))
 
-    params = copy.copy(defaultParams["ExaMiniMDsnap"])
+    params = copy.copy(defaultParams[app])
     params["lattice_nx"] = 200
     generateTest(app, params, getNextIndex(app))
 
-    params = copy.copy(defaultParams["ExaMiniMDsnap"])
+    params = copy.copy(defaultParams[app])
     params["dt"] = 0.0001
     generateTest(app, params, getNextIndex(app))
 
-    params = copy.copy(defaultParams["ExaMiniMDsnap"])
+    params = copy.copy(defaultParams[app])
     params["dt"] = 2.0
     generateTest(app, params, getNextIndex(app))
 
