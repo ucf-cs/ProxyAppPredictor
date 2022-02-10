@@ -1413,8 +1413,8 @@ def getParams(app):
         def factors(n):
             return set(functools.reduce(list.__add__, ([i, n//i] for i in range(1, int(n**0.5) + 1) if n % i == 0)))
         procCount = []
-        procCount.append(random.choice(list(factors(multiprocessing.cpu_count()))))
-        procCount.append(random.choice(list(factors(multiprocessing.cpu_count()/procCount[0]))))
+        procCount.append(int(random.choice(list(factors(multiprocessing.cpu_count())))))
+        procCount.append(int(random.choice(list(factors(multiprocessing.cpu_count()/procCount[0])))))
         procCount.append(int(multiprocessing.cpu_count()/procCount[0]/procCount[1]))
         random.shuffle(procCount)
         params["--npx"] = procCount.pop()
