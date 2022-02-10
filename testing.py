@@ -693,12 +693,18 @@ def makeFile(app, params):
                 for param in params:
                     if not param.startswith(section):
                         continue
-                    if param == None:
+                    if params[param] is None:
                         continue
                     if param == section:
                         continue
                     contents += str(param.partition(section)[2]) + "=" + str(params[param]) + " "
                 contents += "\n"
+            else:
+                # If the section wasn't defined, be sure to wipe out all parameters associated with it.
+                # This is important to keep training data pure.
+                for param in params:
+                    if param.startswith(section):
+                        params[param] = None
     elif app == "nekbone":
         contents = ('{ifbrick} = ifbrick ! brick or linear geometry\n'
                     '{iel0} {ielN} {istep} = iel0,ielN(per proc),stride ! range of number of elements per proc.\n'
