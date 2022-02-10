@@ -1353,6 +1353,9 @@ def getParams(app):
             params["recvariables"] = randParam(app, "recvariables")
         else:
             params["rec"] = False
+        
+        # Ensure this is never enabled, as we have no plans to test it.
+        params["developer"] = False
 
     elif app == "SWFFT":
         params["n_repetitions"] = randParam(app, "n_repetitions")
