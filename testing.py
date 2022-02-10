@@ -912,14 +912,14 @@ def generateTest(app, prod, index):
         output = subprocess.run("sbatch submit.slurm", cwd=testPath, shell=True, check=False,
                                 encoding='utf-8', stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout
         # If the output doesn't match, something went wrong.
-        if not output.startswith("Submitted batch job "):
+        if "Submitted batch job " not in output:
             print(output)
             return False
+        jobId = int(output.split("Submitted batch job ", 1)[1])
         # Add the queued job to our wait list.
         # We add a dictionary so we can keep track of things when we
         # handle the output later.
-        activeJobs[int(output[len("Submitted batch job "):])] = \
-            {"app": app, "index": index, "path": testPath}
+        activeJobs[jobId] = {"app": app, "index": index, "path": testPath}
     # On local, run the command.
     else:
         print("Running app: " + app + "\t test: " + str(index))
