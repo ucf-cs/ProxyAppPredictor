@@ -723,7 +723,7 @@ def getCommand(app, params):
         else:
             exe = "../../../SWFFT"
     elif app == "sw4lite":
-        if SYSTEM == "voltrino":
+        if SYSTEM == "voltrino-int":
             exe = "/projects/ovis/UCF/voltrino_run/sw4lite/sw4lite"
         else:
             exe = "../../../sw4lite"
