@@ -803,7 +803,7 @@ def appendTest(app, test):
 
     # print("Appending test " + str(test) + " for app " + str(app))
     # The location of the output CSV.
-    outputFile = "./tests/" + app + "/dataset.csv"
+    outputFile = "./tests/" + app + "dataset.csv"
     # We only add the header if we are creating the file fresh.
     needsHeader = not os.path.exists(outputFile)
     # Make sure the error key is there. Otherwise, it'll be missing sometimes.
@@ -1081,7 +1081,7 @@ def adjustParams():
         print("Saving DataFrame for app: " + app)
         df[app] = pd.DataFrame(features[app]).T
         # Save parameters and results to CSV for optional recovery.
-        df[app].to_csv("./tests/" + app + "/datasetClassic.csv")
+        df[app].to_csv("./tests/" + app + "datasetClassic.csv")
 
 
 # Read an existing DataFrame back from a saved CSV.
@@ -1091,7 +1091,7 @@ def readDF():
     # For each app.
     for app in enabledApps:
         # Open the existing CSV.
-        df[app] = pd.read_csv("./tests/" + app + "/dataset.csv",
+        df[app] = pd.read_csv("./tests/" + app + "dataset.csv",
                               sep=",", header=0, index_col=0, engine="c", quotechar="\"")
     return
 
