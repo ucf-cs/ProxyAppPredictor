@@ -1495,8 +1495,9 @@ def randomTests():
         # Run the test.
         generateTest(app, params, index)
         # Try to finish jobs.
+        finishJobs(lazy=True)
         # If we want to terminate, we can't be lazy. Be sure all jobs complete.
-        finishJobs(lazy=(not terminate))
+    finishJobs(lazy=False)
     signal.signal(signal.SIGINT, original_sigint)
 
 # Train and test a regressor on a dataset.
