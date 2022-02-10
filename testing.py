@@ -333,9 +333,9 @@ rangeParams["sw4lite"] = {  # Done
                             "fileionwriters": [None],
                             # Done
                             "grid": [True],
-                            "gridny": [1, 100],
-                            "gridnx": [1, 100],
-                            "gridnz": [1, 100],
+                            "gridny": [2, 100],
+                            "gridnx": [2, 100],
+                            "gridnz": [2, 100],
                             "gridx": [1, 20],
                             "gridy": [1, 20],
                             "gridz": [1, 20],
