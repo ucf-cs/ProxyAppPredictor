@@ -2,6 +2,7 @@
 variety of Proxy Apps, both locally and on the Voltrino HPC testbed.
 """
 
+from cmath import inf, nan
 import concurrent.futures
 import copy
 import multiprocessing
@@ -27,15 +28,18 @@ from sklearn import linear_model
 from sklearn import svm
 from sklearn import metrics
 from sklearn import tree
+from sklearn.compose import ColumnTransformer
+from sklearn.cross_decomposition import PLSRegression
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import SGDRegressor
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import train_test_split
-from sklearn.neural_network import MLPRegressor
-from sklearn.linear_model import SGDRegressor
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import KNeighborsRegressor
-from sklearn.cross_decomposition import PLSRegression
+from sklearn.neural_network import MLPRegressor
+from sklearn.pipeline import make_pipeline
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
 import matplotlib.pyplot as plt
 
 pd.options.mode.chained_assignment = None
@@ -59,7 +63,7 @@ SYSTEM = platform.node()
 WAIT_TIME = 1
 # Used to choose which apps to test.
 # rangeParams.keys() #["ExaMiniMDbase", "ExaMiniMDsnap", "SWFFT", "sw4lite", "nekbone", "miniAMR"]
-enabledApps = rangeParams.keys()
+enabledApps = ["ExaMiniMDbase", "ExaMiniMDsnap", "SWFFT", "nekbone", "miniAMR"]  # rangeParams.keys()
 # Whether or not to shortcut out tests that may be redundant or invalid.
 skipTests = True
 # A terminate indicator. Set to True to quit gracefully.
@@ -368,7 +372,7 @@ rangeParams["sw4lite"] = {  # Done
                             "sourcet0": [0.01, 0.50],
                             "sourcefreq": [0.1, 20.0],
                             "sourcef0": [0.0, 5.0],
-                            "sourcetype": ["Ricker","Gaussian","Ramp","Triangle","Sawtooth","SmoothWave","Erf","GaussianInt","VerySmoothBump","RickerInt","Brune","BruneSmoothed","DBrune","GaussianWindow","Liu","Dirac","C6SmoothBump"],
+                            "sourcetype": ["Ricker", "Gaussian", "Ramp", "Triangle", "Sawtooth", "SmoothWave", "Erf", "GaussianInt", "VerySmoothBump", "RickerInt", "Brune", "BruneSmoothed", "DBrune", "GaussianWindow", "Liu", "Dirac", "C6SmoothBump"],
                             # Done
                             "block": [False, True],
                             "blockrhograd": [0.1, 2.0],
@@ -391,33 +395,33 @@ rangeParams["sw4lite"] = {  # Done
                             "blockz2": [None],
                             # Done
                             "topography": [False, True],
-                            "topographyzmax": [0.0,1.0],
-                            "topographyorder": [2,7],
+                            "topographyzmax": [0.0, 1.0],
+                            "topographyorder": [2, 7],
                             "topographyzetabreak": [None],
                             "topographyinput": "gaussian",
-                            "topographyfile": [None], # Unused
-                            "topographygaussianAmp": [0.1,1.0],
-                            "topographygaussianXc": [0.1,0.9],
-                            "topographygaussianYc": [0.1,0.9],
-                            "topographygaussianLx": [0.1,1.0],
-                            "topographygaussianLy": [0.1,1.0],
+                            "topographyfile": [None],  # Unused
+                            "topographygaussianAmp": [0.1, 1.0],
+                            "topographygaussianXc": [0.1, 0.9],
+                            "topographygaussianYc": [0.1, 0.9],
+                            "topographygaussianLx": [0.1, 1.0],
+                            "topographygaussianLy": [0.1, 1.0],
                             "topographyanalyticalMetric": [None],
                             # Done
                             "rec": [False, True],
                             "recx": [None],
                             "recy": [None],
-                            "reclat": [-90.0,90.0],
-                            "reclon": [-180.0,180.0],
+                            "reclat": [-90.0, 90.0],
+                            "reclon": [-180.0, 180.0],
                             "recz": [None],
                             "recdepth": [None],
                             "rectopodepth": [None],
                             "recfile": [None],
                             "recsta": [None],
                             "recnsew": [0, 1],
-                            "recwriteEvery": [100,10000],
-                            "recusgsformat": [0,1],
-                            "recsacformat": [0,1],
-                            "recvariables": ["displacement","velocity","div","curl","strains","displacementgradient"],
+                            "recwriteEvery": [100, 10000],
+                            "recusgsformat": [0, 1],
+                            "recsacformat": [0, 1],
+                            "recvariables": ["displacement", "velocity", "div", "curl", "strains", "displacementgradient"],
                             # Done
                             # No plans to test this.
                             "checkpoint": [False],
@@ -686,7 +690,8 @@ def makeFile(app, params):
         contents += "run {nsteps}\n".format_map(params)
     elif app == "sw4lite":
         contents += "# " + paramsToString(params) + "\n\n"
-        sections = ["fileio","grid","time","supergrid","source","block","topography","rec","checkpoint","restart","dgalerkin","developer","testpointsource"]
+        sections = ["fileio", "grid", "time", "supergrid", "source", "block", "topography",
+                    "rec", "checkpoint", "restart", "dgalerkin", "developer", "testpointsource"]
         for section in sections:
             if params[section]:
                 contents += str(section) + " "
@@ -697,7 +702,8 @@ def makeFile(app, params):
                         continue
                     if param == section:
                         continue
-                    contents += str(param.partition(section)[2]) + "=" + str(params[param]) + " "
+                    contents += str(param.partition(section)
+                                    [2]) + "=" + str(params[param]) + " "
                 contents += "\n"
             else:
                 # If the section wasn't defined, be sure to wipe out all parameters associated with it.
@@ -776,7 +782,8 @@ def getCommand(app, params):
         # Create the number of objects we need to specify.
         for _ in range(params["--num_objects"]):
             # Fill in each of these arguments.
-            args += "--object {type} {bounce} {center_x} {center_y} {center_z} {movement_x} {movement_y} {movement_z} {size_x} {size_y} {size_z} {inc_x} {inc_y} {inc_z} ".format_map(params)
+            args += "--object {type} {bounce} {center_x} {center_y} {center_z} {movement_x} {movement_y} {movement_z} {size_x} {size_y} {size_z} {inc_x} {inc_y} {inc_z} ".format_map(
+                params)
 
     # Assemble the whole command.
     command = exe + " " + args
@@ -1378,13 +1385,13 @@ def getParams(app):
                 params["ngx"] = nextPow2(params["ngx"])
         else:
             params["ngx"] = None
-        if params["ngx"] is None and random.choice(range(2)):
+        if params["ngx"] is not None and random.choice(range(2)):
             params["ngy"] = randParam(app, "ngy")
             if not isPow2(params["ngy"]):
                 params["ngy"] = nextPow2(params["ngy"])
         else:
             params["ngy"] = None
-        if params["ngy"] is None and random.choice(range(2)):
+        if params["ngy"] is not None and random.choice(range(2)):
             params["ngz"] = randParam(app, "ngz")
             if not isPow2(params["ngz"]):
                 params["ngz"] = nextPow2(params["ngz"])
@@ -1485,6 +1492,13 @@ def getParams(app):
         for param, values in rangeParams[app].items():
             params[param] = randParam(app, param)
     
+    # Explicitly fill in unused parameters with None.
+    # This is important to ensure default values aren't used,
+    # to ensure CSV alignment, and to have some default value to train on.
+    for param, values in rangeParams[app].items():
+        if param not in params:
+            params[param] = None
+
     return params
 
 
@@ -1512,6 +1526,10 @@ def randomTests():
 # Train and test a regressor on a dataset.
 def regression(regressor, modelName, X, y):
     ret = str(modelName) + "\n"
+
+    assert np.any(np.isinf(X)) and np.any(np.isnan(X)), "Invalid data in X"
+    assert np.any(np.isinf(y)) and np.any(np.isnan(y)), "Invalid data in y"
+
     # Train Regressor.
     regressor = regressor.fit(X, y)
     # Run and report cross-validation accuracy.
@@ -1536,15 +1554,15 @@ def regression(regressor, modelName, X, y):
     plt.savefig("figures/"+str(modelName).replace(" ", "")+".svg")
 
     print(X.columns)
-    print(regressor.feature_importances_)
-    tree.plot_tree(regressor)
-    plt.show()
+    print(regressor.steps[1][1].feature_importances_)
+    # tree.plot_tree(regressor.steps[1][1])
+    # plt.show()
 
     print(str(modelName))
     return ret
 
 
-def runRegressors(X, y, app=""):
+def runRegressors(X, y, preprocessor, app=""):
     # Make sure our features have the expected shape.
     # Also useful to keep track of test sizes.
     ret = str(X.shape) + "\n"
@@ -1579,8 +1597,14 @@ def runRegressors(X, y, app=""):
         #     futures.append(executor.submit(regression, PLSRegression(
         #         n_components=i), str(i)+" PLS Regression "+app, X, y))
 
+        # Add the preprocessor to the pipeline.
+        clf = Pipeline(
+            steps=[("preprocessor", preprocessor),
+                   ("classifier", tree.DecisionTreeRegressor())]
+        )
+        # Add the future to the list.
         futures.append(executor.submit(
-            regression, tree.DecisionTreeRegressor(), "Decision Tree Regressor "+app, X, y))
+            regression, clf, "Decision Tree Regressor "+app, X, y))
 
         # for i in range(1, 10+1):
         #     layers = tuple(100 for _ in range(i))
@@ -1621,24 +1645,15 @@ def ML():
             X = X.replace('false', '0', regex=True)
             X = X.replace('.true.', '1', regex=True)
             X = X.replace('.false.', '0', regex=True)
-            # Convert non-numerics via an encoder.
-            le = preprocessing.LabelEncoder()
-            # Iterate over every cell.
-            for col in X:
-                for rowIndex, row in X[col].iteritems():
-                    try:
-                        # If it can be a float, make it a float.
-                        X[col][rowIndex] = float(X[col][rowIndex])
-                        # If the float is NaN (unacceptable to Sci-kit), make it -1.0 for now.
-                        if pd.isna(X[col][rowIndex]):
-                            X[col][rowIndex] = -1.0
-                    except ValueError:
-                        # Otherwise, use an encoder to make it numeric.
-                        X[col] = X[col].astype(str)
-                        X[col] = le.fit_transform(X[col])
-            y = X["error"].astype(float)
-            # The time taken should be an output, not an input.
-            # y = X["timeTaken"].astype(float)
+            # For predicting errors.
+            # y = X["error"].astype(float)
+            # For predicting time taken
+            y = X["timeTaken"].astype(float)
+            # Prevent empty values for y.
+            # This should never happen if tests complete gracefully.
+            # Default to the max time of 24 hours.
+            y = y.fillna(86400.0)
+            # When predicting time taken, this cannot be a training feature.
             X = X.drop(columns="timeTaken")
             # When predicting, we cannot know if the program crashed before it starts.
             X = X.drop(columns="error")
@@ -1665,17 +1680,59 @@ def ML():
                 X = X.drop(columns="thermo_rate")
                 X = X.drop(columns="comm_newton")
 
-            # # Standardization.
-            # scaler = preprocessing.StandardScaler().fit(X)
             # X = scaler.transform(X)
             # # Feature selection. Removes useless columns to simplify the model.
-            # sel = feature_selection.VarianceThreshold(threshold=0)
+            sel = feature_selection.VarianceThreshold(threshold=0)
             # X = sel.fit_transform(X)
             # # Discretization. Buckets results to whole minutes like related works.
             # # y = y.apply(lambda x: int(x/60))
 
+            # Track the features types of each cell.
+            numeric_features = []
+            categorical_features = []
+            # Iterate over every cell.
+            for col in X:
+                # Identify what type each column is.
+                isNumeric = True
+                for rowIndex, row in X[col].iteritems():
+                    try:
+                        # If it can be a float, make it a float.
+                        X[col][rowIndex] = float(X[col][rowIndex])
+                        # If the float is NaN (unacceptable to Sci-kit), make it -1.0 for now.
+                        if pd.isnull(X[col][rowIndex]):
+                            X[col][rowIndex] = -1.0
+                    except ValueError:
+                        # Otherwise, we will assume this is categorical data.
+                        isNumeric = False
+                        # DEBUG
+                        print("Found data: " + X[col][rowIndex])
+                if isNumeric:
+                    # For whatever reason, float conversions don't want to work in Pandas dataframes.
+                    # Try changing the value column-wide instead.
+                    # TODO: Doesn't seem to actually solve anything.
+                    X[col] = X[col].astype(float)
+                    numeric_features.append(str(col))
+                else:
+                    categorical_features.append(str(col))
+
+            # Standardization for numeric data.
+            numeric_transformer = Pipeline(
+                steps=[("imputer", SimpleImputer(strategy="median")),
+                       ("scaler", StandardScaler())]
+            )
+            # One-hot encoding for categorical data.
+            categorical_transformer = OneHotEncoder(handle_unknown="ignore")
+            # Add the transformers to a preprocessor object.
+            preprocessor = ColumnTransformer(
+                transformers=[
+                    ("num", numeric_transformer, numeric_features),
+                    ("cat", categorical_transformer, categorical_features),
+                ]
+            )
+
             # Run regressors.
-            futures.append(executor.submit(runRegressors, X, y, app+" base"))
+            futures.append(executor.submit(
+                runRegressors, X, y, preprocessor, app+" base"))
 
         print('Writing output. Waiting for tests to complete.')
         with open('MLoutput.txt', 'w') as f:
