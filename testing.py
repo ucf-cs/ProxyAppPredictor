@@ -805,9 +805,6 @@ def scrapeOutput(output, app, index):
             features[app][index]["timeTaken"] = \
                 int(line[len("timeTaken = "):])
         if "error" in line:
-            # DEBUG: Ignore this error for now. Hopefully it isn't a problem.
-            if "sbatch: error: spank: /opt/ovis/lib64/ovis-ldms/libjobinfo_slurm.so: Plugin file not found" in line:
-                continue
             if "error" not in features[app][index].keys():
                 features[app][index]["error"] = ""
             features[app][index]["error"] += line + "\n"
