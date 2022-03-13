@@ -1119,8 +1119,12 @@ def readDF():
 def randParam(app, param, values=''):
     if values == '':
         values = rangeParams[app][param]
+    # If it is a boolean
+    if isinstance(values[-1], bool):
+        # Pick one of the values at random.
+        return random.choice(values)
     # If it is a number:
-    if isinstance(values[-1], numbers.Number):
+    elif isinstance(values[-1], numbers.Number):
         # Get the lowest value.
         minV = min(x for x in values if x is not None)
         # Get the highest value.
