@@ -976,8 +976,11 @@ def finishJobs(lazy=False):
                 features = scrapeOutput(
                     output, activeJobs[job]["app"], activeJobs[job]["index"])
                 # DEBUG: Report an error to screen.
-                if(features[activeJobs[job]["app"]][activeJobs[job]["index"]].has_key("error")):
-                    print(str(activeJobs[job]["app"]) + " " + str(activeJobs[job]["app"])+ " " + str(features[activeJobs[job]["app"]][activeJobs[job]["index"]]["error"]))
+                if("error" in features[activeJobs[job]["app"]][activeJobs[job]["index"]]):
+                    print(str(activeJobs[job]["app"]) + " " + str(activeJobs[job]["index"])+ ": " + str(features[activeJobs[job]["app"]][activeJobs[job]["index"]]["error"]))
+                else:
+                    print(str(activeJobs[job]["app"]) + " " + str(activeJobs[job]["index"])+ ": Completed!")
+                    pass
                 # Save the output of this job to file.
                 appendTest(activeJobs[job]["app"], activeJobs[job]["index"])
                 # The job has been parsed. Remove it from the list.
