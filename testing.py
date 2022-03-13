@@ -63,7 +63,8 @@ SYSTEM = platform.node()
 WAIT_TIME = 1
 # Used to choose which apps to test.
 # rangeParams.keys() #["ExaMiniMDbase", "ExaMiniMDsnap", "SWFFT", "sw4lite", "nekbone", "miniAMR"]
-enabledApps = ["ExaMiniMDbase", "ExaMiniMDsnap", "SWFFT", "nekbone", "miniAMR"]  # rangeParams.keys()
+# NOTE: These are the apps I have in my draft.
+enabledApps = ["ExaMiniMDsnap", "SWFFT", "nekbone"]
 # Whether or not to shortcut out tests that may be redundant or invalid.
 skipTests = True
 # A terminate indicator. Set to True to quit gracefully.
@@ -970,8 +971,15 @@ def finishJobs(lazy=False):
                 #       + "\tapp: " + activeJobs[job]["app"]
                 #       + "\ttest: " + str(activeJobs[job]["index"]))
                 # Open the file with the completed job.
-                with open(activeJobs[job]["path"] / ("slurm-" + str(job) + ".out"), "r") as f:
+                try:
+                    f = open(activeJobs[job]["path"] / ("slurm-" + str(job) + ".out"), "r")
                     output = f.read()
+                except IOError:
+                    # The file likely doesn't exist yet.
+                    # Try again later.
+                    continue
+                finally:
+                    f.close()
                 # Parse the output.
                 features = scrapeOutput(
                     output, activeJobs[job]["app"], activeJobs[job]["index"])
@@ -1430,10 +1438,11 @@ def getParams(app):
 
         def factors(n):
             return set(functools.reduce(list.__add__, ([i, n//i] for i in range(1, int(n**0.5) + 1) if n % i == 0)))
+        processesCount = 1
         procCount = []
-        procCount.append(int(random.choice(list(factors(multiprocessing.cpu_count())))))
-        procCount.append(int(random.choice(list(factors(multiprocessing.cpu_count()/procCount[0])))))
-        procCount.append(int(multiprocessing.cpu_count()/procCount[0]/procCount[1]))
+        procCount.append(int(random.choice(list(factors(processesCount)))))
+        procCount.append(int(random.choice(list(factors(processesCount/procCount[0])))))
+        procCount.append(int(processesCount/procCount[0]/procCount[1]))
         random.shuffle(procCount)
         params["--npx"] = procCount.pop()
         params["--npy"] = procCount.pop()
