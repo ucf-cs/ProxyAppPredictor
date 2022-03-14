@@ -66,11 +66,11 @@ WAIT_TIME = 1
 # NOTE: These are the apps I have in my draft.
 enabledApps = ["ExaMiniMDsnap", "SWFFT", "nekbone"]
 # Whether or not to shortcut out tests that may be redundant or invalid.
-skipTests = True
+SKIP_TESTS = True
 # A terminate indicator. Set to True to quit gracefully.
 terminate = False
 
-snapFile = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia.gov CITATION: Thompson, Swiler, Trott, Foiles and Tucker, arxiv.org, 1409.3880 (2014)\n'
+SNAP_FILE = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia.gov CITATION: Thompson, Swiler, Trott, Foiles and Tucker, arxiv.org, 1409.3880 (2014)\n'
             '\n'
             '# Definition of SNAP potential Ta_Cand06A\n'
             '# Assumes 1 LAMMPS atom type\n'
@@ -86,7 +86,7 @@ snapFile = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia.gov C
             'snap\n'
             'pair_coeff 1 1 zbl ${zblz} ${zblz}\n'
             'pair_coeff * * snap Ta06A.snapcoeff Ta Ta06A.snapparam Ta\n')
-snapcoeffFile = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia.gov CITATION: Thompson, Swiler, Trott, Foiles and Tucker, arxiv.org, 1409.3880 (2014)\n'
+SNAPCOEFF_FILE = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia.gov CITATION: Thompson, Swiler, Trott, Foiles and Tucker, arxiv.org, 1409.3880 (2014)\n'
                  '\n'
                  '# LAMMPS SNAP coefficients for Ta_Cand06A\n'
                  '\n'
@@ -123,7 +123,7 @@ snapcoeffFile = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia.
                  '-0.06373\n'
                  '0.03965\n'
                  '0.01072\n')
-snapparamFile = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia.gov CITATION: Thompson, Swiler, Trott, Foiles and Tucker, arxiv.org, 1409.3880 (2014)\n'
+SNAPPARAM_FILE = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia.gov CITATION: Thompson, Swiler, Trott, Foiles and Tucker, arxiv.org, 1409.3880 (2014)\n'
                  '\n'
                  '# LAMMPS SNAP parameters for Ta_Cand06A\n'
                  '\n'
@@ -619,7 +619,7 @@ rangeParams["miniAMR"] = {"--help": [False],
 # Convert the parameters list to a string.
 # Used as comments on input files to make the parameters used clear.
 # TODO: Remove/ignore this for deep learning.
-def paramsToString(params):
+def params_to_string(params):
     string = ""
     for param in params:
         string += param + "=" \
@@ -629,7 +629,7 @@ def paramsToString(params):
 
 # Get the next unused test index of the associated app.
 # Enables extended testing.
-def getNextIndex(app):
+def get_next_index(app):
     try:
         idx = len(os.listdir("./tests/" + app + "/"))
     except FileNotFoundError:
@@ -637,7 +637,7 @@ def getNextIndex(app):
     return idx
 
 
-def makeSLURMScript(f):
+def make_slurm_script(f):
     # The base contents of the SLURM script.
     # Use format_map() to substitute parameters.
     contents = ('#!/bin/bash\n'
@@ -662,10 +662,10 @@ def makeSLURMScript(f):
     return contents
 
 
-def makeFile(app, params):
+def make_file(app, params):
     contents = ""
     if app.startswith("ExaMiniMD"):
-        contents += "# " + paramsToString(params) + "\n\n"
+        contents += "# " + params_to_string(params) + "\n\n"
         contents += "units {units}\n".format_map(params)
         contents += "atom_style atomic\n"
         if params["lattice_constant"] != None:
@@ -697,7 +697,7 @@ def makeFile(app, params):
         contents += "newton {comm_newton}\n".format_map(params)
         contents += "run {nsteps}\n".format_map(params)
     elif app == "sw4lite":
-        contents += "# " + paramsToString(params) + "\n\n"
+        contents += "# " + params_to_string(params) + "\n\n"
         sections = ["fileio", "grid", "time", "supergrid", "source", "block", "topography",
                     "rec", "checkpoint", "restart", "dgalerkin", "developer", "testpointsource"]
         for section in sections:
@@ -728,7 +728,7 @@ def makeFile(app, params):
     return contents
 
 
-def getCommand(app, params):
+def get_command(app, params):
     # Get the executable.
     # NOTE: Is there a better way than hardcoding these into the function?
     # Does it really matter anyway? I think not.
@@ -799,7 +799,7 @@ def getCommand(app, params):
 
 
 # Scrape the output for runtime, errors, etc.
-def scrapeOutput(output, app, index):
+def scrape_output(output, app, index):
     lines = output.split('\n')
     for line in lines:
         if line.startswith("timeTaken = "):
@@ -816,7 +816,7 @@ def scrapeOutput(output, app, index):
     return features
 
 
-def appendTest(app, test):
+def append_test(app, test):
     global features
 
     # print("Appending test " + str(test) + " for app " + str(app))
@@ -835,7 +835,7 @@ def appendTest(app, test):
     dataframe.to_csv(outputFile, mode='a', header=needsHeader)
 
 
-def generateTest(app, prod, index):
+def generate_test(app, prod, index):
     global activeJobs
     global features
 
@@ -864,7 +864,7 @@ def generateTest(app, prod, index):
     # NOTE: Add support for compiling per-test binaries from here, if needed.
 
     # Generate the input file contents.
-    fileString = makeFile(app, params)
+    fileString = make_file(app, params)
     # If a fileString was generated
     if fileString != "":
         # Save the contents to an appropriately named file.
@@ -880,21 +880,21 @@ def generateTest(app, prod, index):
     if app.startswith("ExaMiniMD") and params["force_type"] == "snap":
         # Copy in Ta06A.snap, Ta06A.snapcoeff, and Ta06A.snapparam.
         with open(testPath / "Ta06A.snap", "w+") as text_file:
-            text_file.write(snapFile)
+            text_file.write(SNAP_FILE)
         with open(testPath / "Ta06A.snapcoeff", "w+") as text_file:
-            text_file.write(snapcoeffFile)
+            text_file.write(SNAPCOEFF_FILE)
         with open(testPath / "Ta06A.snapparam", "w+") as text_file:
-            text_file.write(snapparamFile)
+            text_file.write(SNAPPARAM_FILE)
 
     # Get the full command, with executable and arguments.
-    command = getCommand(app, params)
+    command = get_command(app, params)
     # Set the command in the parameters.
     # Everything else was set earlier.
     scriptParams["command"] = command
 
     if SYSTEM == "voltrino-int":
         # Generate the SLURM script contents.
-        SLURMString = makeSLURMScript(scriptParams)
+        SLURMString = make_slurm_script(scriptParams)
         # Save the contents to an appropriately named file.
         with open(testPath / "submit.slurm", "w+") as text_file:
             text_file.write(SLURMString)
@@ -945,12 +945,12 @@ def generateTest(app, prod, index):
         # Save the output in the associated test's folder.
         with open(testPath / "output.txt", "w+") as text_file:
             text_file.write(output)
-        features = scrapeOutput(output, app, index)
+        features = scrape_output(output, app, index)
     return True
 
 
 # Handle any unfinished outputs.
-def finishJobs(lazy=False):
+def finish_jobs(lazy=False):
     global activeJobs
     global features
 
@@ -981,16 +981,16 @@ def finishJobs(lazy=False):
                 finally:
                     f.close()
                 # Parse the output.
-                features = scrapeOutput(
+                features = scrape_output(
                     output, activeJobs[job]["app"], activeJobs[job]["index"])
-                # DEBUG: Report an error to screen.
+                # Report an error to screen.
                 if("error" in features[activeJobs[job]["app"]][activeJobs[job]["index"]]):
                     print(str(activeJobs[job]["app"]) + " " + str(activeJobs[job]["index"])+ ": " + str(features[activeJobs[job]["app"]][activeJobs[job]["index"]]["error"]))
                 else:
                     print(str(activeJobs[job]["app"]) + " " + str(activeJobs[job]["index"])+ ": Completed!")
                     pass
                 # Save the output of this job to file.
-                appendTest(activeJobs[job]["app"], activeJobs[job]["index"])
+                append_test(activeJobs[job]["app"], activeJobs[job]["index"])
                 # The job has been parsed. Remove it from the list.
                 activeJobs.pop(job)
                 # We successfully finished a job.
@@ -1014,7 +1014,7 @@ def finishJobs(lazy=False):
 # This function tests the interactions between multiple parameters.
 # It makes multiple adjustments to important parameters in the default file.
 # The parameters enable resuming from an existing set of tests.
-def adjustParams():
+def adjust_params():
     global features
     global df
 
@@ -1025,7 +1025,7 @@ def adjustParams():
         if app == "sw4lite" or app == "miniAMR":
             continue
         # Identify where we left off, in case we already have some results.
-        resumeIndex = getNextIndex(app)
+        resumeIndex = get_next_index(app)
         # Loop through each combination of parameter changes.
         # prod is the cartesian product of our adjusted parameters.
         for index, prod in enumerate((dict(zip(rangeParams[app], x)) for
@@ -1040,13 +1040,13 @@ def adjustParams():
                 prod["lattice_ny"] = prod["lattice_nx"]
                 prod["lattice_nz"] = prod["lattice_nx"]
             elif app == "SWFFT":
-                if skipTests:
+                if SKIP_TESTS:
                     if prod["ngy"] == None and prod["ngz"] != None:
                         # Skip this test. It is invalid.
                         print("Skipping invalid test " + str(index))
                         continue
             elif app == "nekbone":
-                if skipTests:
+                if SKIP_TESTS:
                     skip = False
                     if prod["iel0"] > prod["ielN"]:
                         skip = True
@@ -1072,7 +1072,7 @@ def adjustParams():
                 prod["inc_z"] = prod["inc_x"]
 
                 # These cases are redundant because some parameters are ignored when others are set.
-                if skipTests:
+                if SKIP_TESTS:
                     skip = False
                     if prod["--uniform_refine"] == 1 and prod["--refine_freq"] != 0:
                         skip = True
@@ -1097,11 +1097,11 @@ def adjustParams():
                         print("Skipping redundant test " + str(index))
                         continue
 
-            generateTest(app, prod, index)
+            generate_test(app, prod, index)
             # Try to finish jobs part-way.
-            finishJobs(lazy=True)
+            finish_jobs(lazy=True)
 
-    finishJobs()
+    finish_jobs()
 
     # Legacy DataFrame conversion. Used to diagnose issues compared with my own attempts at writing to a CSV.
     # Convert each app dictionary to a DataFrame.
@@ -1113,7 +1113,7 @@ def adjustParams():
 
 
 # Read an existing DataFrame back from a saved CSV.
-def readDF():
+def read_df():
     global df
 
     # For each app.
@@ -1124,7 +1124,7 @@ def readDF():
     return
 
 
-def randParam(app, param, values=''):
+def rand_param(app, param, values=''):
     if values == '':
         values = rangeParams[app][param]
     # If it is a boolean
@@ -1151,17 +1151,17 @@ def randParam(app, param, values=''):
         return random.choice(values)
 
 # Get a random, valid test case for the given app.
-def getParams(app):
+def get_params(app):
     params = {}
     # All jobs must set these.
-    params["nodes"] = randParam(app, "nodes")
-    params["tasks"] = randParam(app, "tasks")
+    params["nodes"] = rand_param(app, "nodes")
+    params["tasks"] = rand_param(app, "tasks")
 
     if app == "sw4lite":
         if random.choice(rangeParams[app]["fileio"]):
             params["fileio"] = True
-            params["fileioverbose"] = randParam(app, "fileioverbose")
-            params["fileioprintcycle"] = randParam(app, "fileioprintcycle")
+            params["fileioverbose"] = rand_param(app, "fileioverbose")
+            params["fileioprintcycle"] = rand_param(app, "fileioprintcycle")
         else:
             params["fileio"] = False
 
@@ -1176,39 +1176,39 @@ def getParams(app):
                 npts = int(fnpts) + 1
             return float(npts)
         if random.choice(range(2)):
-            params["gridnx"] = randParam(app, "gridnx")
-            params["gridny"] = randParam(app, "gridny")
-            params["gridnz"] = randParam(app, "gridnz")
-            params["gridh"] = randParam(app, "gridh")
+            params["gridnx"] = rand_param(app, "gridnx")
+            params["gridny"] = rand_param(app, "gridny")
+            params["gridnz"] = rand_param(app, "gridnz")
+            params["gridh"] = rand_param(app, "gridh")
             h = params["gridh"]
             xMax = (params["gridnx"]-1)*h
             yMax = (params["gridny"]-1)*h
             zMax = (params["gridnz"]-1)*h
         else:
-            params["gridx"] = randParam(app, "gridx")
-            params["gridy"] = randParam(app, "gridy")
-            params["gridz"] = randParam(app, "gridz")
+            params["gridx"] = rand_param(app, "gridx")
+            params["gridy"] = rand_param(app, "gridy")
+            params["gridz"] = rand_param(app, "gridz")
             choice = random.choice(range(4))
             if choice == 0:
-                params["gridh"] = randParam(app, "gridh")
+                params["gridh"] = rand_param(app, "gridh")
                 h = params["gridh"]
                 xMax = (computeEndGridPoint(params["gridx"], h)-1)*h
                 yMax = (computeEndGridPoint(params["gridy"], h)-1)*h
                 zMax = (computeEndGridPoint(params["gridz"], h)-1)*h
             elif choice == 1:
-                params["gridnx"] = randParam(app, "gridnx")
+                params["gridnx"] = rand_param(app, "gridnx")
                 h = params["gridx"]/(params["gridnx"]-1)
                 xMax = (params["gridnx"]-1)*h
                 yMax = (computeEndGridPoint(params["gridy"], h)-1)*h
                 zMax = (computeEndGridPoint(params["gridz"], h)-1)*h
             elif choice == 2:
-                params["gridny"] = randParam(app, "gridny")
+                params["gridny"] = rand_param(app, "gridny")
                 h = params["gridy"]/(params["gridny"]-1)
                 xMax = (computeEndGridPoint(params["gridx"], h)-1)*h
                 yMax = (params["gridny"]-1)*h
                 zMax = (computeEndGridPoint(params["gridz"], h)-1)*h
             elif choice == 3:
-                params["gridnz"] = randParam(app, "gridnz")
+                params["gridnz"] = rand_param(app, "gridnz")
                 h = params["gridz"]/(params["gridnz"]-1)
                 xMax = (computeEndGridPoint(params["gridx"], h)-1)*h
                 yMax = (computeEndGridPoint(params["gridy"], h)-1)*h
@@ -1216,14 +1216,14 @@ def getParams(app):
 
         params["time"] = True
         if random.choice(range(2)):
-            params["timet"] = randParam(app, "timet")
+            params["timet"] = rand_param(app, "timet")
         else:
-            params["timesteps"] = randParam(app, "timesteps")
+            params["timesteps"] = rand_param(app, "timesteps")
 
         if random.choice(rangeParams[app]["supergrid"]):
             params["supergrid"] = True
-            params["supergridgp"] = randParam(app, "supergridgp")
-            params["supergriddc"] = randParam(app, "supergriddc")
+            params["supergridgp"] = rand_param(app, "supergridgp")
+            params["supergriddc"] = rand_param(app, "supergriddc")
         else:
             params["supergrid"] = False
 
@@ -1231,47 +1231,47 @@ def getParams(app):
         params["source"] = True
         choice = random.choice(range(2))
         if random.choice(range(2)):
-            params["sourcex"] = randParam(app, "sourcex", [0.0, xMax])
-            params["sourcey"] = randParam(app, "sourcey", [0.0, yMax])
+            params["sourcex"] = rand_param(app, "sourcex", [0.0, xMax])
+            params["sourcey"] = rand_param(app, "sourcey", [0.0, yMax])
         else:
-            params["sourcex"] = randParam(app, "sourcex", [0.0, xMax])
-            params["sourcey"] = randParam(app, "sourcey", [0.0, yMax])
+            params["sourcex"] = rand_param(app, "sourcex", [0.0, xMax])
+            params["sourcey"] = rand_param(app, "sourcey", [0.0, yMax])
         if random.choice(range(2)):
-            params["sourcez"] = randParam(app, "sourcez", [0.0, zMax])
+            params["sourcez"] = rand_param(app, "sourcez", [0.0, zMax])
         else:
-            params["sourcedepth"] = randParam(app, "sourcedepth", [0.0, zMax])
+            params["sourcedepth"] = rand_param(app, "sourcedepth", [0.0, zMax])
         if random.choice(range(2)):
             if random.choice(range(2)):
-                params["sourceFx"] = randParam(app, "sourceFx")
+                params["sourceFx"] = rand_param(app, "sourceFx")
             if random.choice(range(2)):
-                params["sourceFy"] = randParam(app, "sourceFy")
+                params["sourceFy"] = rand_param(app, "sourceFy")
             if random.choice(range(2)):
-                params["sourceFz"] = randParam(app, "sourceFz")
+                params["sourceFz"] = rand_param(app, "sourceFz")
             if "sourceFx" not in params and \
                "sourceFy" not in params and \
                "sourceFz" not in params:
                 choice = random.choice(range(3))
                 if choice == 0:
-                    params["sourceFx"] = randParam(app, "sourceFx")
+                    params["sourceFx"] = rand_param(app, "sourceFx")
                 elif choice == 1:
-                    params["sourceFy"] = randParam(app, "sourceFy")
+                    params["sourceFy"] = rand_param(app, "sourceFy")
                 elif choice == 2:
-                    params["sourceFz"] = randParam(app, "sourceFz")
+                    params["sourceFz"] = rand_param(app, "sourceFz")
             if random.choice(range(2)):
-                params["sourcef0"] = randParam(app, "sourcef0")
+                params["sourcef0"] = rand_param(app, "sourcef0")
         else:
             if random.choice(range(2)):
-                params["sourceMxx"] = randParam(app, "sourceMxx")
+                params["sourceMxx"] = rand_param(app, "sourceMxx")
             if random.choice(range(2)):
-                params["sourceMxy"] = randParam(app, "sourceMxy")
+                params["sourceMxy"] = rand_param(app, "sourceMxy")
             if random.choice(range(2)):
-                params["sourceMxz"] = randParam(app, "sourceMxz")
+                params["sourceMxz"] = rand_param(app, "sourceMxz")
             if random.choice(range(2)):
-                params["sourceMyy"] = randParam(app, "sourceMyy")
+                params["sourceMyy"] = rand_param(app, "sourceMyy")
             if random.choice(range(2)):
-                params["sourceMyz"] = randParam(app, "sourceMyz")
+                params["sourceMyz"] = rand_param(app, "sourceMyz")
             if random.choice(range(2)):
-                params["sourceMzz"] = randParam(app, "sourceMzz")
+                params["sourceMzz"] = rand_param(app, "sourceMzz")
             if "sourceMxx" not in params and \
                "sourceMxy" not in params and \
                "sourceMxz" not in params and \
@@ -1280,117 +1280,117 @@ def getParams(app):
                "sourceMzz" not in params:
                 choice = random.choice(range(6))
                 if choice == 0:
-                    params["sourceMxx"] = randParam(app, "sourceMxx")
+                    params["sourceMxx"] = rand_param(app, "sourceMxx")
                 elif choice == 1:
-                    params["sourceMxy"] = randParam(app, "sourceMxy")
+                    params["sourceMxy"] = rand_param(app, "sourceMxy")
                 elif choice == 2:
-                    params["sourceMxz"] = randParam(app, "sourceMxz")
+                    params["sourceMxz"] = rand_param(app, "sourceMxz")
                 elif choice == 3:
-                    params["sourceMyy"] = randParam(app, "sourceMyy")
+                    params["sourceMyy"] = rand_param(app, "sourceMyy")
                 elif choice == 4:
-                    params["sourceMyz"] = randParam(app, "sourceMyz")
+                    params["sourceMyz"] = rand_param(app, "sourceMyz")
                 elif choice == 5:
-                    params["sourceMzz"] = randParam(app, "sourceMzz")
+                    params["sourceMzz"] = rand_param(app, "sourceMzz")
             if random.choice(range(2)):
-                params["sourcem0"] = randParam(app, "sourcem0")
-        params["sourcetype"] = randParam(app, "sourcetype")
-        params["sourcet0"] = randParam(app, "sourcet0")
+                params["sourcem0"] = rand_param(app, "sourcem0")
+        params["sourcetype"] = rand_param(app, "sourcetype")
+        params["sourcet0"] = rand_param(app, "sourcet0")
         if params["sourcetype"] != "Dirac":
-            params["sourcefreq"] = randParam(app, "sourcefreq")
+            params["sourcefreq"] = rand_param(app, "sourcefreq")
 
         if random.choice(rangeParams[app]["topography"]):
             params["topography"] = True
-            params["topographyinput"] = randParam(app, "topographyinput")
-            params["topographyzmax"] = randParam(app, "topographyzmax")
-            params["topographygaussianAmp"] = randParam(app, "topographygaussianAmp")
-            params["topographygaussianXc"] = randParam(app, "topographygaussianXc")
-            params["topographygaussianYc"] = randParam(app, "topographygaussianYc")
-            params["topographygaussianLx"] = randParam(app, "topographygaussianLx")
-            params["topographygaussianLy"] = randParam(app, "topographygaussianLy")
-            params["topographyzetabreak"] = randParam(app, "topographyzetabreak")
-            params["topographyorder"] = randParam(app, "topographyorder")
-            params["topographyfile"] = randParam(app, "topographyfile")
-            params["topographyanalyticalMetric"] = randParam(app, "topographyanalyticalMetric")
+            params["topographyinput"] = rand_param(app, "topographyinput")
+            params["topographyzmax"] = rand_param(app, "topographyzmax")
+            params["topographygaussianAmp"] = rand_param(app, "topographygaussianAmp")
+            params["topographygaussianXc"] = rand_param(app, "topographygaussianXc")
+            params["topographygaussianYc"] = rand_param(app, "topographygaussianYc")
+            params["topographygaussianLx"] = rand_param(app, "topographygaussianLx")
+            params["topographygaussianLy"] = rand_param(app, "topographygaussianLy")
+            params["topographyzetabreak"] = rand_param(app, "topographyzetabreak")
+            params["topographyorder"] = rand_param(app, "topographyorder")
+            params["topographyfile"] = rand_param(app, "topographyfile")
+            params["topographyanalyticalMetric"] = rand_param(app, "topographyanalyticalMetric")
         else:
             params["topography"] = False
 
         if random.choice(rangeParams[app]["block"]):
             params["block"] = True
-            params["blockvp"] = randParam(app, "blockvp")
-            params["blockvs"] = randParam(app, "blockvs")
+            params["blockvp"] = rand_param(app, "blockvp")
+            params["blockvs"] = rand_param(app, "blockvs")
             if random.choice(range(2)):
-                params["blockrho"] = randParam(app, "blockrho")
+                params["blockrho"] = rand_param(app, "blockrho")
             else:
-                params["blockr"] = randParam(app, "blockr")
+                params["blockr"] = rand_param(app, "blockr")
             if random.choice(range(2)):
-                params["blockx1"] = randParam(app, "blockx1", [0.0, xMax])
-                params["blockx2"] = randParam(app, "blockx2", [0.0, xMax])
+                params["blockx1"] = rand_param(app, "blockx1", [0.0, xMax])
+                params["blockx2"] = rand_param(app, "blockx2", [0.0, xMax])
                 if params["blockx1"] > params["blockx2"]:
                     # Swap
                     tmp = params["blockx1"]
                     params["blockx1"] = params["blockx2"]
                     params["blockx2"] = tmp
             if random.choice(range(2)):
-                params["blocky1"] = randParam(app, "blocky1", [0.0, yMax])
-                params["blocky2"] = randParam(app, "blocky2", [0.0, yMax])
+                params["blocky1"] = rand_param(app, "blocky1", [0.0, yMax])
+                params["blocky2"] = rand_param(app, "blocky2", [0.0, yMax])
                 if params["blocky1"] > params["blocky2"]:
                     # Swap
                     tmp = params["blocky1"]
                     params["blocky1"] = params["blocky2"]
                     params["blocky2"] = tmp
             if random.choice(range(2)):
-                params["blockz1"] = randParam(app, "blockz1", [0.0, zMax])
-                params["blockz2"] = randParam(app, "blockz2", [0.0, zMax])
+                params["blockz1"] = rand_param(app, "blockz1", [0.0, zMax])
+                params["blockz2"] = rand_param(app, "blockz2", [0.0, zMax])
                 if params["blockz1"] > params["blockz2"]:
                     # Swap
                     tmp = params["blockz1"]
                     params["blockz1"] = params["blockz2"]
                     params["blockz2"] = tmp
             if "topography" in params:
-                params["blockabsdepth"] = randParam(app, "blockabsdepth")
+                params["blockabsdepth"] = rand_param(app, "blockabsdepth")
             if random.choice(range(2)):
-                params["blockrhograd"] = randParam(app, "blockrhograd")
+                params["blockrhograd"] = rand_param(app, "blockrhograd")
             if random.choice(range(2)):
-                params["blockvpgrad"] = randParam(app, "blockvpgrad")
+                params["blockvpgrad"] = rand_param(app, "blockvpgrad")
             if random.choice(range(2)):
-                params["blockvsgrad"] = randParam(app, "blockvsgrad")
+                params["blockvsgrad"] = rand_param(app, "blockvsgrad")
         else:
             params["block"] = False
 
         if random.choice(rangeParams[app]["rec"]):
             params["rec"] = True
             if random.choice(range(2)):
-                params["recx"] = randParam(app, "recx", [0.0, xMax])
-                params["recy"] = randParam(app, "recy", [0.0, yMax])
+                params["recx"] = rand_param(app, "recx", [0.0, xMax])
+                params["recy"] = rand_param(app, "recy", [0.0, yMax])
             else:
-                params["reclat"] = randParam(app, "reclat")
-                params["reclon"] = randParam(app, "reclon")
+                params["reclat"] = rand_param(app, "reclat")
+                params["reclon"] = rand_param(app, "reclon")
             choice = random.choice(range(3))
             if choice == 0:
-                params["recz"] = randParam(app, "recz", [0.0, zMax])
+                params["recz"] = rand_param(app, "recz", [0.0, zMax])
             elif choice == 1:
-                params["recdepth"] = randParam(app, "recdepth", [0.0, zMax])
+                params["recdepth"] = rand_param(app, "recdepth", [0.0, zMax])
             elif choice == 2:
-                params["rectopodepth"] = randParam(app, "rectopodepth", [0.0, zMax])
-            params["recfile"] = randParam(app, "recfile")
-            params["recsta"] = randParam(app, "recsta")
-            params["recnsew"] = randParam(app, "recnsew")
-            params["recwriteEvery"] = randParam(app, "recwriteEvery")
+                params["rectopodepth"] = rand_param(app, "rectopodepth", [0.0, zMax])
+            params["recfile"] = rand_param(app, "recfile")
+            params["recsta"] = rand_param(app, "recsta")
+            params["recnsew"] = rand_param(app, "recnsew")
+            params["recwriteEvery"] = rand_param(app, "recwriteEvery")
             if random.choice(range(2)):
                 params["recusgsformat"] = 1
                 params["recsacformat"] = 0
             else:
                 params["recusgsformat"] = 0
                 params["recsacformat"] = 1
-            params["recvariables"] = randParam(app, "recvariables")
+            params["recvariables"] = rand_param(app, "recvariables")
         else:
             params["rec"] = False
-        
+
         # Ensure this is never enabled, as we have no plans to test it.
         params["developer"] = False
 
     elif app == "SWFFT":
-        params["n_repetitions"] = randParam(app, "n_repetitions")
+        params["n_repetitions"] = rand_param(app, "n_repetitions")
 
         # Confirm the number is a power of 2.
         def isPow2(x):
@@ -1399,19 +1399,19 @@ def getParams(app):
         def nextPow2(x):
             return 1 if x == 0 else 2**(x - 1).bit_length()
         if random.choice(range(2)):
-            params["ngx"] = randParam(app, "ngx")
+            params["ngx"] = rand_param(app, "ngx")
             if not isPow2(params["ngx"]):
                 params["ngx"] = nextPow2(params["ngx"])
         else:
             params["ngx"] = None
         if params["ngx"] is not None and random.choice(range(2)):
-            params["ngy"] = randParam(app, "ngy")
+            params["ngy"] = rand_param(app, "ngy")
             if not isPow2(params["ngy"]):
                 params["ngy"] = nextPow2(params["ngy"])
         else:
             params["ngy"] = None
         if params["ngy"] is not None and random.choice(range(2)):
-            params["ngz"] = randParam(app, "ngz")
+            params["ngz"] = rand_param(app, "ngz")
             if not isPow2(params["ngz"]):
                 params["ngz"] = nextPow2(params["ngz"])
         else:
@@ -1420,21 +1420,21 @@ def getParams(app):
     elif app == "miniAMR":
         params["--help"] = None
 
-        params["--nx"] = randParam(app, "--nx")
+        params["--nx"] = rand_param(app, "--nx")
         if params["--nx"] % 2 != 0:
             params["--nx"] += 1
-        params["--ny"] = randParam(app, "--nx")
+        params["--ny"] = rand_param(app, "--nx")
         if params["--ny"] % 2 != 0:
             params["--ny"] += 1
-        params["--nz"] = randParam(app, "--nx")
+        params["--nz"] = rand_param(app, "--nx")
         if params["--nz"] % 2 != 0:
             params["--nz"] += 1
 
-        params["--init_x"] = randParam(app, "--init_x")
-        params["--init_y"] = randParam(app, "--init_x")
-        params["--init_z"] = randParam(app, "--init_x")
+        params["--init_x"] = rand_param(app, "--init_x")
+        params["--init_y"] = rand_param(app, "--init_x")
+        params["--init_z"] = rand_param(app, "--init_x")
 
-        params["--reorder"] = randParam(app, "--reorder")
+        params["--reorder"] = rand_param(app, "--reorder")
 
         def factors(n):
             return set(functools.reduce(list.__add__, ([i, n//i] for i in range(1, int(n**0.5) + 1) if n % i == 0)))
@@ -1448,55 +1448,55 @@ def getParams(app):
         params["--npy"] = procCount.pop()
         params["--npz"] = procCount.pop()
 
-        params["--max_blocks"] = randParam(app, "--max_blocks")
+        params["--max_blocks"] = rand_param(app, "--max_blocks")
         if params["--max_blocks"] < params["--init_x"] * params["--init_y"] * params["--init_z"]:
             params["--max_blocks"] = params["--init_x"] * params["--init_y"] * params["--init_z"]
 
-        params["--num_refine"] = randParam(app, "--num_refine")
-        params["--block_change"] = randParam(app, "--block_change")
+        params["--num_refine"] = rand_param(app, "--num_refine")
+        params["--block_change"] = rand_param(app, "--block_change")
         
-        params["--uniform_refine"] = randParam(app, "--uniform_refine")
+        params["--uniform_refine"] = rand_param(app, "--uniform_refine")
         if params["--uniform_refine"] != 1:
-            params["--refine_freq"] = randParam(app, "--refine_freq")
+            params["--refine_freq"] = rand_param(app, "--refine_freq")
         else:
             params["--refine_freq"] = None
         
-        params["--inbalance"] = randParam(app, "--inbalance")
-        params["--lb_opt"] = randParam(app, "--lb_opt")
+        params["--inbalance"] = rand_param(app, "--inbalance")
+        params["--lb_opt"] = rand_param(app, "--lb_opt")
 
-        params["--num_vars"] = randParam(app, "--num_vars")
-        params["--comm_vars"] = randParam(app, "--comm_vars", [0, params["--num_vars"]])
+        params["--num_vars"] = rand_param(app, "--num_vars")
+        params["--comm_vars"] = rand_param(app, "--comm_vars", [0, params["--num_vars"]])
 
         if random.choice(range(2)):
-            params["--num_tsteps"] = randParam(app, "--num_tsteps")
+            params["--num_tsteps"] = rand_param(app, "--num_tsteps")
         else:
-            params["--time"] = randParam(app, "--time")
+            params["--time"] = rand_param(app, "--time")
 
-        params["--stages_per_ts"] = randParam(app, "--stages_per_ts")
-        params["--permute"] = randParam(app, "--permute")
-        params["--code"] = randParam(app, "--code")
-        params["--checksum_freq"] = randParam(app, "--checksum_freq")
+        params["--stages_per_ts"] = rand_param(app, "--stages_per_ts")
+        params["--permute"] = rand_param(app, "--permute")
+        params["--code"] = rand_param(app, "--code")
+        params["--checksum_freq"] = rand_param(app, "--checksum_freq")
         params["--stencil"] = random.choice(rangeParams["miniAMR"]["--stencil"])
-        params["--error_tol"] = randParam(app, "--error_tol")
-        params["--report_diffusion"] = randParam(app, "--report_diffusion")
-        params["--report_perf"] = randParam(app, "--report_perf")
+        params["--error_tol"] = rand_param(app, "--error_tol")
+        params["--report_diffusion"] = rand_param(app, "--report_diffusion")
+        params["--report_perf"] = rand_param(app, "--report_perf")
 
-        params["--num_objects"] = randParam(app, "--num_objects")
+        params["--num_objects"] = rand_param(app, "--num_objects")
         if params["--num_objects"] > 0:
-            params["type"] = randParam(app, "type")
-            params["bounce"] = randParam(app, "bounce")
-            params["center_x"] = randParam(app, "center_x")
-            params["center_y"] = randParam(app, "center_x")
-            params["center_z"] = randParam(app, "center_x")
-            params["movement_x"] = randParam(app, "movement_x")
-            params["movement_y"] = randParam(app, "movement_x")
-            params["movement_z"] = randParam(app, "movement_x")
-            params["size_x"] = randParam(app, "size_x")
-            params["size_y"] = randParam(app, "size_x")
-            params["size_z"] = randParam(app, "size_x")
-            params["inc_x"] = randParam(app, "inc_x")
-            params["inc_y"] = randParam(app, "inc_x")
-            params["inc_z"] = randParam(app, "inc_x")
+            params["type"] = rand_param(app, "type")
+            params["bounce"] = rand_param(app, "bounce")
+            params["center_x"] = rand_param(app, "center_x")
+            params["center_y"] = rand_param(app, "center_x")
+            params["center_z"] = rand_param(app, "center_x")
+            params["movement_x"] = rand_param(app, "movement_x")
+            params["movement_y"] = rand_param(app, "movement_x")
+            params["movement_z"] = rand_param(app, "movement_x")
+            params["size_x"] = rand_param(app, "size_x")
+            params["size_y"] = rand_param(app, "size_x")
+            params["size_z"] = rand_param(app, "size_x")
+            params["inc_x"] = rand_param(app, "inc_x")
+            params["inc_y"] = rand_param(app, "inc_x")
+            params["inc_z"] = rand_param(app, "inc_x")
 
     # TODO: Handle conditional cases for each app here.
     # elif app == "ExaMiniMDbase":
@@ -1510,7 +1510,7 @@ def getParams(app):
     else:
         # For each parameter:
         for param, values in rangeParams[app].items():
-            params[param] = randParam(app, param)
+            params[param] = rand_param(app, param)
     
     # Explicitly fill in unused parameters with None.
     # This is important to ensure default values aren't used,
@@ -1523,7 +1523,7 @@ def getParams(app):
 
 
 # Run random permutations of tests outside of the specific set of tests we have defined. This extra variety helps training.
-def randomTests():
+def random_tests():
     global terminate
     signal.signal(signal.SIGINT, exit_gracefully)
     # Cancel via Ctrl+C.
@@ -1532,23 +1532,24 @@ def randomTests():
         # Pick a random app.
         app = random.choice(list(enabledApps))
         # Get the index to save the test files.
-        index = getNextIndex(app)
+        index = get_next_index(app)
         # Get the parameters.
-        params = getParams(app)
+        params = get_params(app)
         # Run the test.
-        generateTest(app, params, index)
+        generate_test(app, params, index)
         # Try to finish jobs.
-        finishJobs(lazy=True)
+        finish_jobs(lazy=True)
         # If we want to terminate, we can't be lazy. Be sure all jobs complete.
-    finishJobs(lazy=False)
+    finish_jobs(lazy=False)
     signal.signal(signal.SIGINT, original_sigint)
 
 # Train and test a regressor on a dataset.
 def regression(regressor, modelName, X, y):
     ret = str(modelName) + "\n"
 
-    assert np.any(np.isinf(X)) and np.any(np.isnan(X)), "Invalid data in X"
-    assert np.any(np.isinf(y)) and np.any(np.isnan(y)), "Invalid data in y"
+    # DEBUG
+    #assert np.any(np.isinf(X)) and np.any(np.isnan(X)), "Invalid data in X"
+    #assert np.any(np.isinf(y)) and np.any(np.isnan(y)), "Invalid data in y"
 
     # Train Regressor.
     regressor = regressor.fit(X, y)
@@ -1559,6 +1560,15 @@ def regression(regressor, modelName, X, y):
     scores = cross_val_score(regressor, X, y, cv=5,
                              scoring="neg_root_mean_squared_error")
     ret += " RMSE: " + str(scores.mean()) + "\n"
+    scores = cross_val_score(regressor, X, y, cv=5,
+                             scoring="neg_mean_absolute_error")
+    ret += " MAE: " + str(scores.mean()) + "\n"
+    scores = cross_val_score(regressor, X, y, cv=5,
+                             scoring="neg_median_absolute_error")
+    ret += " MedAE: " + str(scores.mean()) + "\n"
+    scores = cross_val_score(regressor, X, y, cv=5,
+                             scoring="neg_mean_absolute_percentage_error")
+    ret += " MAE%: " + str(scores.mean()) + "\n"
 
     # Retrain on 4/5 of the data for plotting.
     X_train, X_test, y_train, y_test = train_test_split(
@@ -1568,13 +1578,18 @@ def regression(regressor, modelName, X, y):
     y_pred = regressor.predict(X_test)
     plt.figure()
     plt.scatter(y_pred, y_test, s=20, c="black", label="data")
-    plt.xlabel("Predicted ("+str(modelName)+")")
-    plt.ylabel("Actual")
-    plt.legend()
+    plt.xlabel("Predicted (seconds) ("+str(modelName)+")")
+    plt.ylabel("Actual (seconds)")
+    if "ExaMiniMD" in modelName:
+        plt.xscale('log',base=10)
+        plt.yscale('log',base=10)
+    # plt.legend()
     plt.savefig("figures/"+str(modelName).replace(" ", "")+".svg")
 
-    print(X.columns)
-    print(regressor.steps[1][1].feature_importances_)
+    # DEBUG
+    # print(X.columns)
+    # print(regressor.steps[1][1].feature_importances_)
+
     # tree.plot_tree(regressor.steps[1][1])
     # plt.show()
 
@@ -1582,54 +1597,45 @@ def regression(regressor, modelName, X, y):
     return ret
 
 
-def runRegressors(X, y, preprocessor, app=""):
+def get_pipeline(preprocessor, clf):
+    return Pipeline(steps=[("preprocessor", preprocessor), ("classifier", clf)])
+
+
+def run_regressors(X, y, preprocessor, app=""):
     # Make sure our features have the expected shape.
     # Also useful to keep track of test sizes.
     ret = str(X.shape) + "\n"
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=48) as executor:
         futures = []
 
         # Run our regressors.
-        # forestRegressor = RandomForestRegressor()
-        # futures.append(executor.submit(
-        #     regression, forestRegressor, "Random Forest Regressor "+app, X, y))
-
-        # futures.append(executor.submit(
-        #     regression, linear_model.BayesianRidge(), "Bayesian Ridge "+app, X, y))
-
-        # futures.append(executor.submit(regression, svm.SVR(),
-        #                "Support Vector Regression RBF "+app, X, y))
-        # for i in range(1, 3+1):
-        #     futures.append(executor.submit(regression, svm.SVR(
-        #         kernel="poly", degree=i), "Support Vector Regression poly "+str(i)+" "+app, X, y))
-        # futures.append(executor.submit(regression, svm.SVR(
-        #     kernel="sigmoid"), "Support Vector Regression sigmoid "+app, X, y))
-
-        # futures.append(executor.submit(regression, make_pipeline(StandardScaler(), SGDRegressor(
-        #     max_iter=1000, tol=1e-3)), "Linear Stochastic Gradient Descent Regressor "+app, X, y))
-
-        # for i in range(1, 7+1):
-        #     futures.append(executor.submit(regression, KNeighborsRegressor(
-        #         n_neighbors=i), str(i)+" Nearest Neighbors Regressor "+app, X, y))
-
-        # for i in range(1, 4+1):
-        #     futures.append(executor.submit(regression, PLSRegression(
-        #         n_components=i), str(i)+" PLS Regression "+app, X, y))
-
-        # Add the preprocessor to the pipeline.
-        clf = Pipeline(
-            steps=[("preprocessor", preprocessor),
-                   ("classifier", tree.DecisionTreeRegressor())]
-        )
-        # Add the future to the list.
+        forestRegressor = RandomForestRegressor()
         futures.append(executor.submit(
-            regression, clf, "Decision Tree Regressor "+app, X, y))
+            regression, get_pipeline(preprocessor, forestRegressor), "Random Forest Regressor "+app, X, y))
 
-        # for i in range(1, 10+1):
-        #     layers = tuple(100 for _ in range(i))
-        #     futures.append(executor.submit(regression, MLPRegressor(
-        #         activation="relu", hidden_layer_sizes=layers, random_state=1, max_iter=500), str(i)+" MLP Regressor relu "+app, X, y))
+        futures.append(executor.submit(
+            regression, get_pipeline(preprocessor, linear_model.BayesianRidge()), "Bayesian Ridge "+app, X, y))
+
+        futures.append(executor.submit(regression, get_pipeline(preprocessor, svm.SVR()), "Support Vector Regression RBF "+app, X, y))
+        for i in range(1, 3+1):
+            futures.append(executor.submit(regression, get_pipeline(preprocessor, svm.SVR(kernel="poly", degree=i)), "Support Vector Regression poly "+str(i)+" "+app, X, y))
+        futures.append(executor.submit(regression, get_pipeline(preprocessor, svm.SVR(kernel="sigmoid")), "Support Vector Regression sigmoid "+app, X, y))
+
+        futures.append(executor.submit(regression, get_pipeline(preprocessor, make_pipeline(StandardScaler(), SGDRegressor(max_iter=1000, tol=1e-3))), "Linear Stochastic Gradient Descent Regressor "+app, X, y))
+
+        for i in range(1, 7+1):
+            futures.append(executor.submit(regression, get_pipeline(preprocessor, KNeighborsRegressor(n_neighbors=i)), str(i)+" Nearest Neighbors Regressor "+app, X, y))
+
+        for i in range(1, 4+1):
+            futures.append(executor.submit(regression, get_pipeline(preprocessor, PLSRegression(n_components=i)), str(i)+" PLS Regression "+app, X, y))
+
+        # Add the future to the list.
+        futures.append(executor.submit(regression, get_pipeline(preprocessor, tree.DecisionTreeRegressor()), "Decision Tree Regressor "+app, X, y))
+
+        for i in range(1, 10+1):
+            layers = tuple(100 for _ in range(i))
+            futures.append(executor.submit(regression, get_pipeline(preprocessor, MLPRegressor(activation="relu", hidden_layer_sizes=layers, random_state=1, max_iter=500)), str(i)+" MLP Regressor relu "+app, X, y))
 
         for future in futures:
             ret += future.result()
@@ -1637,10 +1643,14 @@ def runRegressors(X, y, preprocessor, app=""):
 
 
 # Run machine learning on the DataFrames.
-def ML():
+def ml():
     global df
+    REMOVE_ERRORS =True
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:
+    # DEBUG
+    pd.set_option("display.max_rows", None, "display.max_columns", None)
+    
+    with concurrent.futures.ProcessPoolExecutor(max_workers=48) as executor:
         futures = []
         for app in enabledApps:
             # Print the app name, so we keep track of which one is being worked on.
@@ -1651,13 +1661,16 @@ def ML():
             # Use the error field to report simply whether or not we encountered an
             # error. We can use this as a training feature.
             if "error" in X.columns:
-                X["error"] = X["error"].notnull()
-                # Filter out errors.
-                # X = X[X["error"].isnull()]
-                # X = X.drop(columns="error")
-                # if X.shape[0] < 1:
-                #     print("All tests contained errors. Skipping...")
-                #     continue
+                if REMOVE_ERRORS:
+                    # Filter out errors.
+                    X = X[X["error"].isnull()]
+                    X = X.drop(columns="error")
+                    if X.shape[0] < 1:
+                        print("All tests contained errors. Skipping...")
+                        continue
+                else:
+                    X["error"] = X["error"].notnull()
+
             # Simple replacements for base cases.
             X = X.replace('on', '1', regex=True)
             X = X.replace('off', '0', regex=True)
@@ -1665,22 +1678,35 @@ def ML():
             X = X.replace('false', '0', regex=True)
             X = X.replace('.true.', '1', regex=True)
             X = X.replace('.false.', '0', regex=True)
-            # For predicting errors.
-            # y = X["error"].astype(float)
-            # For predicting time taken
-            y = X["timeTaken"].astype(float)
-            # Prevent empty values for y.
-            # This should never happen if tests complete gracefully.
-            # Default to the max time of 24 hours.
-            y = y.fillna(86400.0)
-            # When predicting time taken, this cannot be a training feature.
+
+            PREDICTION = "timeTaken"
+
+            assert not (REMOVE_ERRORS and PREDICTION == "error")
+
+            # Prediction selection.
+            if PREDICTION == "error":
+                # For predicting errors.
+                y = X["error"].astype(float)
+            elif PREDICTION == "timeTaken":
+                # For predicting time taken
+                y = X["timeTaken"].astype(float)
+                # Prevent empty values for y.
+                # This should never happen if tests complete gracefully.
+                # Default to the max time of 24 hours.
+                y = y.fillna(86400.0)
+
+            # When predicting, time taken cannot be known ahead of time.
             X = X.drop(columns="timeTaken")
-            # When predicting, we cannot know if the program crashed before it starts.
-            X = X.drop(columns="error")
+            if REMOVE_ERRORS:
+                # The column was already removed by now in this case.
+                pass
+            else:
+                # When predicting, we cannot know if the program crashed before it starts.
+                X = X.drop(columns="error")
             # The testNum is also irrelevant for training purposes.
             X = X.drop(columns="testNum")
 
-            if app == "ExaMiniMD":
+            if "ExaMiniMD" in app:
                 X = X.drop(columns="units")
                 X = X.drop(columns="lattice")
                 X = X.drop(columns="lattice_constant")
@@ -1725,7 +1751,7 @@ def ML():
                         # Otherwise, we will assume this is categorical data.
                         isNumeric = False
                         # DEBUG
-                        print("Found data: " + X[col][rowIndex])
+                        #print("Found data: " + X[col][rowIndex])
                 if isNumeric:
                     # For whatever reason, float conversions don't want to work in Pandas dataframes.
                     # Try changing the value column-wide instead.
@@ -1738,21 +1764,16 @@ def ML():
             # Standardization for numeric data.
             numeric_transformer = Pipeline(
                 steps=[("imputer", SimpleImputer(strategy="median")),
-                       ("scaler", StandardScaler())]
-            )
+                       ("scaler", StandardScaler())])
             # One-hot encoding for categorical data.
             categorical_transformer = OneHotEncoder(handle_unknown="ignore")
             # Add the transformers to a preprocessor object.
-            preprocessor = ColumnTransformer(
-                transformers=[
-                    ("num", numeric_transformer, numeric_features),
-                    ("cat", categorical_transformer, categorical_features),
-                ]
-            )
+            preprocessor = ColumnTransformer(transformers=[
+                ("num", numeric_transformer, numeric_features),
+                ("cat", categorical_transformer, categorical_features),])
 
             # Run regressors.
-            futures.append(executor.submit(
-                runRegressors, X, y, preprocessor, app+" base"))
+            futures.append(executor.submit(run_regressors, X, y, preprocessor, app))
 
         print('Writing output. Waiting for tests to complete.')
         with open('MLoutput.txt', 'w') as f:
@@ -1763,43 +1784,43 @@ def ML():
 
 # Used to run a small set of hardcoded test cases.
 # Useful for debugging purposes.
-def baseTest():
+def base_test():
     app = "ExaMiniMDsnap"
 
     params = copy.copy(defaultParams[app])
     params["lattice_nx"] = 1
-    generateTest(app, params, getNextIndex(app))
+    generate_test(app, params, get_next_index(app))
 
     params = copy.copy(defaultParams[app])
     params["lattice_nx"] = 200
-    generateTest(app, params, getNextIndex(app))
+    generate_test(app, params, get_next_index(app))
 
     params = copy.copy(defaultParams[app])
     params["dt"] = 0.0001
-    generateTest(app, params, getNextIndex(app))
+    generate_test(app, params, get_next_index(app))
 
     params = copy.copy(defaultParams[app])
     params["dt"] = 2.0
-    generateTest(app, params, getNextIndex(app))
+    generate_test(app, params, get_next_index(app))
 
-    finishJobs()
+    finish_jobs()
 
 
 def main():
-    # baseTest()
+    # base_test()
     # return
     fromCSV = False
 
     # Optionally start training from CSV immediately.
     if fromCSV:
-        readDF()
+        read_df()
     else:
         # Run through all of the primary tests.
-        # adjustParams()
+        # adjust_params()
         # Run tests at random indefinitely.
-        randomTests()
+        random_tests()
     # Perform machine learning.
-    # ML()
+    # ml()
 
 
 def exit_gracefully(signum, frame):
