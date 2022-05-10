@@ -249,7 +249,7 @@ if test -z "$jdir"; then
 fi
 
 if test "0" = "$SLURM_NODEID"; then
-	if test -n "ldms_startclean"; then
+	if test -n "$ldms_startclean"; then
 		echo "Warning: starting with all fresh ldmsd files".
 		/bin/rm -rf $3 $4 \
 			$jdir/store \

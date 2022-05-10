@@ -61,6 +61,13 @@ features = {}
 SYSTEM = platform.node()
 # Time to wait on SLURM, in seconds, to avoid a busy loop.
 WAIT_TIME = 1
+# The maximum number of jobs to enque.
+# Up to 24 can be queued (MaxSubmitPU).
+MAX_JOBS = 24
+# Runs apps with debug symbols enabled. Set to false for performance testing.
+DEBUG_APPS = False
+# Whether or not to run ML tests in baseline mode.
+BASELINE = False
 # Used to choose which apps to test.
 # rangeParams.keys() #["ExaMiniMDbase", "ExaMiniMDsnap", "SWFFT", "sw4lite", "nekbone", "miniAMR"]
 # NOTE: These are the apps I have in my draft.
@@ -213,9 +220,9 @@ defaultParams["SWFFT"] = {"n_repetitions": 1,
                           "nodes": 4,
                           "tasks": 32}
 rangeParams["SWFFT"] = {"n_repetitions": [1, 2, 4, 8, 16, 64],
-                        "ngx": [256, 512, 1024, 2048],
-                        "ngy": [None, 256, 512, 1024, 2048],
-                        "ngz": [None, 256, 512, 1024, 2048],
+                        "ngx": [256, 512, 1024],
+                        "ngy": [None, 256, 512, 1024],
+                        "ngz": [None, 256, 512, 1024],
                         "nodes": [1, 4],
                         "tasks": [1, 31]}
 
@@ -631,7 +638,7 @@ def params_to_string(params):
 # Enables extended testing.
 def get_next_index(app):
     try:
-        idx = len(os.listdir("./tests/" + app + "/"))
+        idx = int(max(os.listdir("./tests/" + app + "/"))) + 1
     except FileNotFoundError:
         idx = 0
     return idx
@@ -648,7 +655,7 @@ def make_slurm_script(f):
                 'export OMP_NUM_THREADS=1\n'
                 'export OMP_PLACES=threads\n'
                 'export OMP_PROC_BIND=true\n'
-                '/home/kmlamar/ProxyAppPredictor/ldms_init.sh ./\n'
+                '/home/kmlamar/ProxyAppPredictor/ldms_init.sh $(pwd)\n'
                 'echo "----------------------------------------"\n'
                 'START_TS=$(date +"%s")\n'
                 'echo "----------------------------------------"\n'
@@ -730,33 +737,17 @@ def make_file(app, params):
 
 def get_command(app, params):
     # Get the executable.
-    # NOTE: Is there a better way than hardcoding these into the function?
-    # Does it really matter anyway? I think not.
+    if SYSTEM == "voltrino-int":
+        exe = "/projects/ovis/UCF/voltrino_run/"
+    else:
+        exe = "../../../"
     if app.startswith("ExaMiniMD"):
-        if SYSTEM == "voltrino-int":
-            exe = "/projects/ovis/UCF/voltrino_run/ExaMiniMD/ExaMiniMD"
-        else:
-            exe = "../../../ExaMiniMD"
-    elif app == "SWFFT":
-        if SYSTEM == "voltrino-int":
-            exe = "/projects/ovis/UCF/voltrino_run/SWFFT/SWFFT"
-        else:
-            exe = "../../../SWFFT"
-    elif app == "sw4lite":
-        if SYSTEM == "voltrino-int":
-            exe = "/projects/ovis/UCF/voltrino_run/sw4lite/sw4lite"
-        else:
-            exe = "../../../sw4lite"
-    elif app == "nekbone":
-        if SYSTEM == "voltrino-int":
-            exe = "/projects/ovis/UCF/voltrino_run/nekbone/nekbone"
-        else:
-            exe = "../../../nekbone"
-    elif app == "miniAMR":
-        if SYSTEM == "voltrino-int":
-            exe = "/projects/ovis/UCF/voltrino_run/miniAMR/miniAMR.x"
-        else:
-            exe = "../../../miniAMR.x"
+        exe += "ExaMiniMD" + "/" + "ExaMiniMD"
+    else:
+        exe += str(app) + "/" + str(app)
+    # nekbone doesn't have a debug build.
+    if DEBUG_APPS and app != "nekbone":
+        exe += ".g"
 
     args = ""
     if app.startswith("ExaMiniMD"):
@@ -805,11 +796,7 @@ def scrape_output(output, app, index):
         if line.startswith("timeTaken = "):
             features[app][index]["timeTaken"] = \
                 int(line[len("timeTaken = "):])
-        if "error" in line:
-            if "error" not in features[app][index].keys():
-                features[app][index]["error"] = ""
-            features[app][index]["error"] += line + "\n"
-        if "libhugetlbfs" in line:
+        if "error" in line or "fatal" in line or "libhugetlbfs" in line:
             if "error" not in features[app][index].keys():
                 features[app][index]["error"] = ""
             features[app][index]["error"] += line + "\n"
@@ -909,9 +896,8 @@ def generate_test(app, prod, index):
             # print("There are currently " + (str(nJobs) + " queued jobs for this user"))
             # If there is room on the queue, break out of the loop.
             # On my account, 5 jobs can run at once (MaxJobsPU),
-            # 24 can be queued (MaxSubmitPU).
             # Can check by running: sacctmgr show qos format=MaxJobsPU,MaxSubmitPU
-            if nJobs < 24:
+            if nJobs < MAX_JOBS:
                 break
             # Wait before trying again.
             time.sleep(WAIT_TIME)
@@ -1103,14 +1089,30 @@ def adjust_params():
 
     finish_jobs()
 
-    # Legacy DataFrame conversion. Used to diagnose issues compared with my own attempts at writing to a CSV.
-    # Convert each app dictionary to a DataFrame.
+# TODO: Sweep through this to identify heavy sw4lite parameters to avoid.
+# NOTE: Some of these parameters may do nothing in a narrow sweep like this.
+def narrow_params():
+    global features
+    # Loop through each Proxy App.
     for app in enabledApps:
-        print("Saving DataFrame for app: " + app)
-        df[app] = pd.DataFrame(features[app]).T
-        # Save parameters and results to CSV for optional recovery.
-        df[app].to_csv("./tests/" + app + "datasetClassic.csv")
-
+        index = 0
+        # For each parameter that can be changed, based on our rangeParams list.
+        for param in rangeParams[app]:
+            # Get the default parameters, which we will adjust slightly.
+            params = copy.copy(defaultParams[app])
+            # For each valid choice for this parameter.
+            for choice in rangeParams[app][param]:
+                # Skip this choice if it's already the default.
+                if choice == defaultParams[app][param]:
+                    continue
+                # Replace the default with this choice.
+                params[param] = choice
+                # Run the test.
+                generate_test(app, params, index)
+                index += 1
+                # Try to finish jobs part-way.
+                finish_jobs(lazy=True)
+    finish_jobs()
 
 # Read an existing DataFrame back from a saved CSV.
 def read_df():
@@ -1153,9 +1155,21 @@ def rand_param(app, param, values=''):
 # Get a random, valid test case for the given app.
 def get_params(app):
     params = {}
+
+    # Confirm the number is a power of 2.
+    def isPow2(x):
+        return (x & (x-1) == 0) and x != 0
+    # Round up to the nearest power of 2.
+    def nextPow2(x):
+        return 1 if x == 0 else 2**(x - 1).bit_length()
+
     # All jobs must set these.
     params["nodes"] = rand_param(app, "nodes")
+    if not isPow2(params["nodes"]):
+        params["nodes"] = nextPow2(params["nodes"])
     params["tasks"] = rand_param(app, "tasks")
+    if not isPow2(params["tasks"]):
+        params["tasks"] = nextPow2(params["tasks"])
 
     if app == "sw4lite":
         if random.choice(rangeParams[app]["fileio"]):
@@ -1392,24 +1406,17 @@ def get_params(app):
     elif app == "SWFFT":
         params["n_repetitions"] = rand_param(app, "n_repetitions")
 
-        # Confirm the number is a power of 2.
-        def isPow2(x):
-            return (x & (x-1) == 0) and x != 0
-        # Round up to the nearest power of 2.
-        def nextPow2(x):
-            return 1 if x == 0 else 2**(x - 1).bit_length()
+        params["ngx"] = rand_param(app, "ngx")
+        if not isPow2(params["ngx"]):
+            params["ngx"] = nextPow2(params["ngx"])
+
         if random.choice(range(2)):
-            params["ngx"] = rand_param(app, "ngx")
-            if not isPow2(params["ngx"]):
-                params["ngx"] = nextPow2(params["ngx"])
-        else:
-            params["ngx"] = None
-        if params["ngx"] is not None and random.choice(range(2)):
             params["ngy"] = rand_param(app, "ngy")
             if not isPow2(params["ngy"]):
                 params["ngy"] = nextPow2(params["ngy"])
         else:
             params["ngy"] = None
+
         if params["ngy"] is not None and random.choice(range(2)):
             params["ngz"] = rand_param(app, "ngz")
             if not isPow2(params["ngz"]):
@@ -1438,7 +1445,7 @@ def get_params(app):
 
         def factors(n):
             return set(functools.reduce(list.__add__, ([i, n//i] for i in range(1, int(n**0.5) + 1) if n % i == 0)))
-        processesCount = 1
+        processesCount = params["tasks"]
         procCount = []
         procCount.append(int(random.choice(list(factors(processesCount)))))
         procCount.append(int(random.choice(list(factors(processesCount/procCount[0])))))
@@ -1552,23 +1559,18 @@ def regression(regressor, modelName, X, y):
     #assert np.any(np.isinf(y)) and np.any(np.isnan(y)), "Invalid data in y"
 
     # Train Regressor.
+    # Time the training.
+    startTime = time.process_time()
     regressor = regressor.fit(X, y)
+    endTime = time.process_time()
     # Run and report cross-validation accuracy.
     scores = cross_val_score(regressor, X, y, cv=5,
                              scoring="r2")
     ret += " R^2: " + str(scores.mean()) + "\n"
-    scores = cross_val_score(regressor, X, y, cv=5,
-                             scoring="neg_root_mean_squared_error")
-    ret += " RMSE: " + str(scores.mean()) + "\n"
-    scores = cross_val_score(regressor, X, y, cv=5,
-                             scoring="neg_mean_absolute_error")
-    ret += " MAE: " + str(scores.mean()) + "\n"
-    scores = cross_val_score(regressor, X, y, cv=5,
-                             scoring="neg_median_absolute_error")
-    ret += " MedAE: " + str(scores.mean()) + "\n"
-    scores = cross_val_score(regressor, X, y, cv=5,
-                             scoring="neg_mean_absolute_percentage_error")
-    ret += " MAE%: " + str(scores.mean()) + "\n"
+    ret += str(endTime - startTime) + "s \n"
+    # scores = cross_val_score(regressor, X, y, cv=5,
+    #                          scoring="neg_root_mean_squared_error")
+    # ret += " RMSE: " + str(scores.mean()) + "\n"
 
     # Retrain on 4/5 of the data for plotting.
     X_train, X_test, y_train, y_test = train_test_split(
@@ -1649,7 +1651,7 @@ def ml():
 
     # DEBUG
     pd.set_option("display.max_rows", None, "display.max_columns", None)
-    
+
     with concurrent.futures.ProcessPoolExecutor(max_workers=48) as executor:
         futures = []
         for app in enabledApps:
@@ -1679,6 +1681,7 @@ def ml():
             X = X.replace('.true.', '1', regex=True)
             X = X.replace('.false.', '0', regex=True)
 
+            # Choose what to predict.
             PREDICTION = "timeTaken"
 
             assert not (REMOVE_ERRORS and PREDICTION == "error")
@@ -1725,6 +1728,12 @@ def ml():
                 X = X.drop(columns="comm_exchange_rate")
                 X = X.drop(columns="thermo_rate")
                 X = X.drop(columns="comm_newton")
+            
+            # Skip anything that isn't a job input parameter.
+            if BASELINE:
+                for col in X:
+                    if col not in ["nodes","tasks"]:
+                        X = X.drop(columns=col)
 
             # X = scaler.transform(X)
             # # Feature selection. Removes useless columns to simplify the model.
@@ -1751,7 +1760,7 @@ def ml():
                         # Otherwise, we will assume this is categorical data.
                         isNumeric = False
                         # DEBUG
-                        #print("Found data: " + X[col][rowIndex])
+                        # print("Found data: " + X[col][rowIndex])
                 if isNumeric:
                     # For whatever reason, float conversions don't want to work in Pandas dataframes.
                     # Try changing the value column-wide instead.
@@ -1785,22 +1794,9 @@ def ml():
 # Used to run a small set of hardcoded test cases.
 # Useful for debugging purposes.
 def base_test():
-    app = "ExaMiniMDsnap"
+    app = "sw4lite"
 
     params = copy.copy(defaultParams[app])
-    params["lattice_nx"] = 1
-    generate_test(app, params, get_next_index(app))
-
-    params = copy.copy(defaultParams[app])
-    params["lattice_nx"] = 200
-    generate_test(app, params, get_next_index(app))
-
-    params = copy.copy(defaultParams[app])
-    params["dt"] = 0.0001
-    generate_test(app, params, get_next_index(app))
-
-    params = copy.copy(defaultParams[app])
-    params["dt"] = 2.0
     generate_test(app, params, get_next_index(app))
 
     finish_jobs()
@@ -1817,6 +1813,7 @@ def main():
     else:
         # Run through all of the primary tests.
         # adjust_params()
+        # narrow_params()
         # Run tests at random indefinitely.
         random_tests()
     # Perform machine learning.
