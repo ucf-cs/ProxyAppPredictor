@@ -1655,9 +1655,12 @@ def ml():
     with concurrent.futures.ProcessPoolExecutor(max_workers=48) as executor:
         futures = []
         for app in enabledApps:
+            # Test with and without baseline.
+            for baseline in [True, False]:
             # Print the app name, so we keep track of which one is being worked on.
             print("\n" + app)
-            futures.append(executor.submit(str, "\n" + app + "\n"))
+                futures.append(executor.submit(str, "\n" + app +
+                               "baseline" if baseline else "" + "\n"))
             X = df[app]
 
             # Use the error field to report simply whether or not we encountered an
@@ -1730,7 +1733,7 @@ def ml():
                 X = X.drop(columns="comm_newton")
             
             # Skip anything that isn't a job input parameter.
-            if BASELINE:
+                if baseline:
                 for col in X:
                     if col not in ["nodes","tasks"]:
                         X = X.drop(columns=col)
@@ -1782,7 +1785,8 @@ def ml():
                 ("cat", categorical_transformer, categorical_features),])
 
             # Run regressors.
-            futures.append(executor.submit(run_regressors, X, y, preprocessor, app))
+                futures.append(executor.submit(run_regressors, X, y, preprocessor, app +
+                               "baseline" if baseline else ""))
 
         print('Writing output. Waiting for tests to complete.')
         with open('MLoutput.txt', 'w') as f:
