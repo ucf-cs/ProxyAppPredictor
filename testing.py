@@ -34,6 +34,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import SGDRegressor
 from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import learning_curve
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.neural_network import MLPRegressor
@@ -1582,11 +1583,30 @@ def regression(regressor, modelName, X, y):
     plt.scatter(y_pred, y_test, s=20, c="black", label="data")
     plt.xlabel("Predicted (seconds) ("+str(modelName)+")")
     plt.ylabel("Actual (seconds)")
-    if "ExaMiniMD" in modelName:
-        plt.xscale('log',base=10)
-        plt.yscale('log',base=10)
+    # if "ExaMiniMD" in modelName:
+    #     plt.xscale('log',base=10)
+    #     plt.yscale('log',base=10)
     # plt.legend()
     plt.savefig("figures/"+str(modelName).replace(" ", "")+".svg")
+
+    # Plot the learning curves.
+    train_sizes, train_scores, test_scores = learning_curve(
+        regressor,
+        X,
+        y,
+        train_sizes=np.linspace(0.1, 1.0, 20),
+        scoring="neg_mean_squared_error",
+        cv=5,
+        #n_jobs=12,
+        # return_times=True, # May be useful for training and testing run time measurements.
+    )
+    plt.figure()
+    plt.plot(train_sizes, -test_scores.mean(1), label=str(modelName))
+    plt.xlabel("Train size")
+    plt.ylabel("Mean Squared Error")
+    plt.title("Learning curve - " + str(modelName))
+    plt.legend(loc="best")
+    plt.savefig("figures/"+str(modelName).replace(" ", "")+"_learning.svg")
 
     # DEBUG
     # print(X.columns)
@@ -1616,6 +1636,8 @@ def run_regressors(X, y, preprocessor, app=""):
         futures.append(executor.submit(
             regression, get_pipeline(preprocessor, forestRegressor), "Random Forest Regressor "+app, X, y))
 
+        futures.append(executor.submit(regression, get_pipeline(preprocessor, tree.DecisionTreeRegressor()), "Decision Tree Regressor "+app, X, y))
+
         futures.append(executor.submit(
             regression, get_pipeline(preprocessor, linear_model.BayesianRidge()), "Bayesian Ridge "+app, X, y))
 
@@ -1629,11 +1651,9 @@ def run_regressors(X, y, preprocessor, app=""):
         for i in range(1, 7+1):
             futures.append(executor.submit(regression, get_pipeline(preprocessor, KNeighborsRegressor(n_neighbors=i)), str(i)+" Nearest Neighbors Regressor "+app, X, y))
 
+        if app != "nekbonebaseline":
         for i in range(1, 4+1):
             futures.append(executor.submit(regression, get_pipeline(preprocessor, PLSRegression(n_components=i)), str(i)+" PLS Regression "+app, X, y))
-
-        # Add the future to the list.
-        futures.append(executor.submit(regression, get_pipeline(preprocessor, tree.DecisionTreeRegressor()), "Decision Tree Regressor "+app, X, y))
 
         for i in range(1, 10+1):
             layers = tuple(100 for _ in range(i))
@@ -1785,8 +1805,8 @@ def ml():
                 ("cat", categorical_transformer, categorical_features),])
 
             # Run regressors.
-                futures.append(executor.submit(run_regressors, X, y, preprocessor, app +
-                               "baseline" if baseline else ""))
+                futures.append(executor.submit(run_regressors, X, y, preprocessor,
+                               app + "baseline" if baseline else app))
 
         print('Writing output. Waiting for tests to complete.')
         with open('MLoutput.txt', 'w') as f:
@@ -1819,7 +1839,7 @@ def main():
         # adjust_params()
         # narrow_params()
         # Run tests at random indefinitely.
-        random_tests()
+        pass
     # Perform machine learning.
     # ml()
 
