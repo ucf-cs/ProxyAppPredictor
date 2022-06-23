@@ -1530,7 +1530,8 @@ def get_params(app):
     return params
 
 
-# Run random permutations of tests outside of the specific set of tests we have defined. This extra variety helps training.
+# Run random permutations of tests outside of the specific set of tests we have defined.
+# This extra variety helps training.
 def random_tests():
     global terminate
     signal.signal(signal.SIGINT, exit_gracefully)
@@ -1594,17 +1595,17 @@ def regression(regressor, modelName, X, y):
         regressor,
         X,
         y,
-        train_sizes=np.linspace(0.1, 1.0, 20),
+        train_sizes=np.linspace(0.1, 1.0, 100),
         scoring="neg_mean_squared_error",
         cv=5,
-        #n_jobs=12,
+        n_jobs=-1,
         # return_times=True, # May be useful for training and testing run time measurements.
     )
     plt.figure()
     plt.plot(train_sizes, -test_scores.mean(1), label=str(modelName))
     plt.xlabel("Train size")
     plt.ylabel("Mean Squared Error")
-    plt.title("Learning curve - " + str(modelName))
+    #plt.title("Learning curve - " + str(modelName))
     plt.legend(loc="best")
     plt.savefig("figures/"+str(modelName).replace(" ", "")+"_learning.svg")
 
@@ -1648,16 +1649,23 @@ def run_regressors(X, y, preprocessor, app=""):
 
         futures.append(executor.submit(regression, get_pipeline(preprocessor, make_pipeline(StandardScaler(), SGDRegressor(max_iter=1000, tol=1e-3))), "Linear Stochastic Gradient Descent Regressor "+app, X, y))
 
-        for i in range(1, 7+1):
-            futures.append(executor.submit(regression, get_pipeline(preprocessor, KNeighborsRegressor(n_neighbors=i)), str(i)+" Nearest Neighbors Regressor "+app, X, y))
+        # for i in range(1, 7+1):
+        #     futures.append(executor.submit(regression, get_pipeline(preprocessor, KNeighborsRegressor(n_neighbors=i)), str(i)+" Nearest Neighbors Regressor "+app, X, y))
 
         if app != "nekbonebaseline":
         for i in range(1, 4+1):
             futures.append(executor.submit(regression, get_pipeline(preprocessor, PLSRegression(n_components=i)), str(i)+" PLS Regression "+app, X, y))
 
-        for i in range(1, 10+1):
-            layers = tuple(100 for _ in range(i))
-            futures.append(executor.submit(regression, get_pipeline(preprocessor, MLPRegressor(activation="relu", hidden_layer_sizes=layers, random_state=1, max_iter=500)), str(i)+" MLP Regressor relu "+app, X, y))
+        # for i in range(1, 10+1):
+        #     layers = tuple(100 for _ in range(i))
+        #     futures.append(executor.submit(regression, get_pipeline(preprocessor, MLPRegressor(activation="relu", hidden_layer_sizes=layers, random_state=1, max_iter=500)), str(i)+" MLP Regressor relu "+app, X, y))
+
+        i = 4
+        layers = tuple(100 for _ in range(i))
+        futures.append(executor.submit(regression, get_pipeline(preprocessor, MLPRegressor(activation="relu", hidden_layer_sizes=layers, random_state=1, max_iter=500)), str(i)+" MLP Regressor relu "+app, X, y))
+
+        i = 4
+        futures.append(executor.submit(regression, get_pipeline(preprocessor, KNeighborsRegressor(n_neighbors=i)), str(i)+" Nearest Neighbors Regressor "+app, X, y))
 
         for future in futures:
             ret += future.result()
@@ -1680,7 +1688,7 @@ def ml():
             # Print the app name, so we keep track of which one is being worked on.
             print("\n" + app)
                 futures.append(executor.submit(str, "\n" + app +
-                               "baseline" if baseline else "" + "\n"))
+                                ("baseline" if baseline else "") + "\n"))
             X = df[app]
 
             # Use the error field to report simply whether or not we encountered an
@@ -1806,7 +1814,7 @@ def ml():
 
             # Run regressors.
                 futures.append(executor.submit(run_regressors, X, y, preprocessor,
-                               app + "baseline" if baseline else app))
+                               app + ("baseline" if baseline else "")))
 
         print('Writing output. Waiting for tests to complete.')
         with open('MLoutput.txt', 'w') as f:
