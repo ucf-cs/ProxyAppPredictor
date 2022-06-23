@@ -11,16 +11,11 @@ pip install wheel numpy pandas sklearn matplotlib
 
 Run the following substitution on `MLoutput.txt` through https://regex101.com/ with the Python flavor:
 
-TEST STRING
+REGULAR EXPRESSION
 ```
-
- R\^2: ([0-9\-\.]+)
- RMSE: ([0-9\-\.]+)
- MAE: ([0-9\-\.]+)
- MedAE: ([0-9\-\.]+)
- MAE%: ([0-9\-\.]+)
+([A-Za-z0-9 ()]+) ([A-Za-z]+)\n R\^2: ([0-9\-\.]+)\n([0-9\.]+)s 
 ```
 SUBSTITUTION
 ```
-\t\1
+\1\t\3\t\4
 ```
