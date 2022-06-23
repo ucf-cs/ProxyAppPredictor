@@ -1653,8 +1653,8 @@ def run_regressors(X, y, preprocessor, app=""):
         #     futures.append(executor.submit(regression, get_pipeline(preprocessor, KNeighborsRegressor(n_neighbors=i)), str(i)+" Nearest Neighbors Regressor "+app, X, y))
 
         if app != "nekbonebaseline":
-        for i in range(1, 4+1):
-            futures.append(executor.submit(regression, get_pipeline(preprocessor, PLSRegression(n_components=i)), str(i)+" PLS Regression "+app, X, y))
+            for i in range(1, 4+1):
+                futures.append(executor.submit(regression, get_pipeline(preprocessor, PLSRegression(n_components=i)), str(i)+" PLS Regression "+app, X, y))
 
         # for i in range(1, 10+1):
         #     layers = tuple(100 for _ in range(i))
@@ -1685,8 +1685,8 @@ def ml():
         for app in enabledApps:
             # Test with and without baseline.
             for baseline in [True, False]:
-            # Print the app name, so we keep track of which one is being worked on.
-            print("\n" + app)
+                # Print the app name, so we keep track of which one is being worked on.
+                print("\n" + app)
                 futures.append(executor.submit(str, "\n" + app +
                                 ("baseline" if baseline else "") + "\n"))
             X = df[app]
@@ -1761,7 +1761,7 @@ def ml():
                 X = X.drop(columns="comm_newton")
             
             # Skip anything that isn't a job input parameter.
-                if baseline:
+            if baseline:
                 for col in X:
                     if col not in ["nodes","tasks"]:
                         X = X.drop(columns=col)
@@ -1813,8 +1813,8 @@ def ml():
                 ("cat", categorical_transformer, categorical_features),])
 
             # Run regressors.
-                futures.append(executor.submit(run_regressors, X, y, preprocessor,
-                               app + ("baseline" if baseline else "")))
+            futures.append(executor.submit(run_regressors, X, y, preprocessor,
+                            app + ("baseline" if baseline else "")))
 
         print('Writing output. Waiting for tests to complete.')
         with open('MLoutput.txt', 'w') as f:
