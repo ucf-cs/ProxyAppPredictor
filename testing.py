@@ -32,6 +32,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LinearRegression
 from sklearn.linear_model import SGDRegressor
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import learning_curve
@@ -41,38 +42,47 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import make_pipeline
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from complete.complete_regressor import CompleteRegressor
 import matplotlib.pyplot as plt
 
 pd.options.mode.chained_assignment = None
 
 # The default parameters for each application.
-defaultParams = {}
+default_params = {}
 # A set of sane parameter ranges.
 # Our intent is to sweep through these with different input files.
-rangeParams = {}
+range_params = {}
 # A dictionary of Pandas DataFrames.
 # Each application gets its own DataFrame.
 df = {}
+# This list will keep track of all jobs yet to be queued.
+queued_jobs = {}
 # This list will keep track of all active SLURM jobs.
 # Will associate the app and index for tracking.
-activeJobs = {}
+active_jobs = {}
 # This dictionary will hold all inputs and outputs.
 features = {}
 # Used to identify what type of machine is being used.
 SYSTEM = platform.node()
 # Time to wait on SLURM, in seconds, to avoid a busy loop.
 WAIT_TIME = 1
-# The maximum number of jobs to enque.
+# The maximum number of active jobs to enqueue.
 # Up to 24 can be queued (MaxSubmitPU).
 MAX_JOBS = 24
+# The maximum number of queued jobs to enqueue.
+# The larger this number, the greater the typical distance between tests with
+# the same inputs.
+MAX_QUEUE = 30
+# The number of times to run the same test.
+REPEAT_COUNT = 5
 # Runs apps with debug symbols enabled. Set to false for performance testing.
 DEBUG_APPS = False
 # Whether or not to run ML tests in baseline mode.
 BASELINE = False
 # Used to choose which apps to test.
-# rangeParams.keys() #["ExaMiniMDbase", "ExaMiniMDsnap", "SWFFT", "sw4lite", "nekbone", "miniAMR"]
+# range_params.keys() #["ExaMiniMDbase", "ExaMiniMDsnap", "SWFFT", "sw4lite", "nekbone", "miniAMR"]
 # NOTE: These are the apps I have in my draft.
-enabledApps = ["ExaMiniMDsnap", "SWFFT", "nekbone"]
+enabled_apps = ["ExaMiniMDsnap", "SWFFT", "nekbone"]
 # Whether or not to shortcut out tests that may be redundant or invalid.
 SKIP_TESTS = True
 # A terminate indicator. Set to True to quit gracefully.
@@ -148,7 +158,7 @@ SNAPPARAM_FILE = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia
                  'quadraticflag 0\n')
 
 # A set of sane defaults based on 3d Lennard-Jones melt (in.lj).
-defaultParams["ExaMiniMDbase"] = {"units": "lj",
+default_params["ExaMiniMDbase"] = {"units": "lj",
                                   "lattice": "fcc",
                                   "lattice_constant": 0.8442,
                                   "lattice_offset_x": 0.0,
@@ -172,7 +182,7 @@ defaultParams["ExaMiniMDbase"] = {"units": "lj",
                                   "nsteps": 100,
                                   "nodes": 4,
                                   "tasks": 32}
-rangeParams["ExaMiniMDbase"] = {"force_type": ["lj/cut"],
+range_params["ExaMiniMDbase"] = {"force_type": ["lj/cut"],
                                 "lattice_nx": [1, 5, 26],
                                 "lattice_ny": [1, 5, 26],
                                 "lattice_nz": [1, 5, 26],
@@ -180,8 +190,7 @@ rangeParams["ExaMiniMDbase"] = {"force_type": ["lj/cut"],
                                 "nsteps": [0, 10, 100, 1000],
                                 "nodes": [1, 4],
                                 "tasks": [1, 32]}
-# TODO: Fix the snap case for ExaMiniMD. Issues often occur when lattice_nx or dt are changed.
-defaultParams["ExaMiniMDsnap"] = {"units": "metal",
+default_params["ExaMiniMDsnap"] = {"units": "metal",
                                   "lattice": "sc",
                                   "lattice_constant": 3.316,
                                   "lattice_offset_x": 0.0,
@@ -205,7 +214,7 @@ defaultParams["ExaMiniMDsnap"] = {"units": "metal",
                                   "nsteps": 100,
                                   "nodes": 4,
                                   "tasks": 32}
-rangeParams["ExaMiniMDsnap"] = {"force_type": ["snap"],
+range_params["ExaMiniMDsnap"] = {"force_type": ["snap"],
                                 "lattice_nx": [1, 5, 26],
                                 "lattice_ny": [1, 5, 26],
                                 "lattice_nz": [1, 5, 26],
@@ -214,20 +223,20 @@ rangeParams["ExaMiniMDsnap"] = {"force_type": ["snap"],
                                 "nodes": [1, 4],
                                 "tasks": [1, 32]}
 
-defaultParams["SWFFT"] = {"n_repetitions": 1,
+default_params["SWFFT"] = {"n_repetitions": 1,
                           "ngx": 512,
                           "ngy": None,
                           "ngz": None,
                           "nodes": 4,
                           "tasks": 32}
-rangeParams["SWFFT"] = {"n_repetitions": [1, 2, 4, 8, 16, 64],
+range_params["SWFFT"] = {"n_repetitions": [1, 2, 4, 8, 16, 64],
                         "ngx": [256, 512, 1024],
                         "ngy": [None, 256, 512, 1024],
                         "ngz": [None, 256, 512, 1024],
                         "nodes": [1, 4],
                         "tasks": [1, 31]}
 
-defaultParams["sw4lite"] = {"grid": True,
+default_params["sw4lite"] = {"grid": True,
                             "gridny": None,
                             "gridnx": None,
                             "gridnz": None,
@@ -263,7 +272,7 @@ defaultParams["sw4lite"] = {"grid": True,
                             "fileiopfs": None,
                             "fileionwriters": None,
                             "time": True,
-                            # Note: Separate time instantiations in example file.
+                            # Note: Multiple time instantiations in example file.
                             "timet": 3.0,
                             "timesteps": 5,
                             "source": True,
@@ -341,7 +350,7 @@ defaultParams["sw4lite"] = {"grid": True,
                             "dgalerkinsinglemode": None,
                             "nodes": 4,
                             "tasks": 32}
-rangeParams["sw4lite"] = {  # Done
+range_params["sw4lite"] = {  # Done
                             "fileio": [False, True],
                             "fileiopath": [None],
                             "fileioverbose": [0, 5],
@@ -359,7 +368,6 @@ rangeParams["sw4lite"] = {  # Done
                             "gridh": [0.001, 1.0],
                             # Done
                             "time": [True],
-                            # Note: Multiple separate time instantiations in example file.
                             "timet": [0.1, 1.0],
                             "timesteps": [1, 5],
                             # Done
@@ -476,7 +484,7 @@ rangeParams["sw4lite"] = {  # Done
                             "nodes": [1, 4],
                             "tasks": [1, 32]}
 
-defaultParams["nekbone"] = {"ifbrick": ".false.",
+default_params["nekbone"] = {"ifbrick": ".false.",
                             "iel0": 1,
                             "ielN": 50,
                             "istep": 1,
@@ -492,7 +500,7 @@ defaultParams["nekbone"] = {"ifbrick": ".false.",
                             # nekbone is limited to 10 processors. It gets different rules.
                             "nodes": 1,
                             "tasks": 10}
-rangeParams["nekbone"] = {"ifbrick": [".false.", ".true."],
+range_params["nekbone"] = {"ifbrick": [".false.", ".true."],
                           "iel0": [1, 50],
                           "ielN": [50],
                           "istep": [1, 2],
@@ -509,7 +517,7 @@ rangeParams["nekbone"] = {"ifbrick": [".false.", ".true."],
                           "tasks": [10]}
 
 # NOTE: Several of these parameters are commented out as they are unsupported in the MPI version of the program.
-defaultParams["miniAMR"] = {"--help": False,
+default_params["miniAMR"] = {"--help": False,
                             "--nx": 10,
                             "--ny": 10,
                             "--nz": 10,
@@ -565,7 +573,7 @@ defaultParams["miniAMR"] = {"--help": False,
                             "inc_z": 0.0,
                             "nodes": 4,
                             "tasks": 32}
-rangeParams["miniAMR"] = {"--help": [False],
+range_params["miniAMR"] = {"--help": [False],
                           "--nx": [10, 1000],
                           "--ny": [None],
                           "--nz": [None],
@@ -824,7 +832,7 @@ def append_test(app, test):
 
 
 def generate_test(app, prod, index):
-    global activeJobs
+    global active_jobs
     global features
 
     # These are the defaults right now.
@@ -833,7 +841,7 @@ def generate_test(app, prod, index):
                     "tasks": prod["tasks"]}
 
     # Get the default parameters, which we will adjust.
-    params = copy.copy(defaultParams[app])
+    params = copy.copy(default_params[app])
     # Update the params based on our cartesian product.
     params.update(prod)
     # Add the test number to the list of params.
@@ -887,19 +895,63 @@ def generate_test(app, prod, index):
         with open(testPath / "submit.slurm", "w+") as text_file:
             text_file.write(SLURMString)
 
+    # Queue up the job.
+    queue_job(index, testPath, app, command)
+
+
+# TODO: Add a job to our Python queue.
+def queue_job(index, testPath, app, command):
+    global queued_jobs
+
+    # Ensure the queue doesn't get too big too fast.
+    # Run some existing jobs until we are under the threshold.
+    while len(queued_jobs) > MAX_QUEUE:
+        run_job(lazy=False)
+
+    queued_jobs[index] = {testPath: testPath,
+                          app:      app,
+                          command:  command}
+    run_job(lazy=True)
+    pass
+
+# Run the job in SLURM/local.
+# If lazy, only try queueing once.
+def run_job(index=0, lazy=False):
+    global queued_jobs
+
+    if index != 0:
+        job = queued_jobs[index]
+    else:
+        # If index = 0, pick a job at random from the queue.
+        index, job = random.choice(list(queued_jobs.items()))
+
+    # Remove the job from the list.
+    queued_jobs.pop(index)
+
     # Wait until the test is ready to run.
     # On Voltrino, wait until the queue empties a bit.
     if SYSTEM == "voltrino-int":
         while True:
             # Get the number of jobs currently in my queue.
-            nJobs = int(subprocess.run("squeue -u kmlamar | grep -c kmlamar", stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT, shell=True, check=False, encoding='utf-8').stdout)
+            nJobs = int(subprocess.run("squeue -u kmlamar | grep -c kmlamar",
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        shell=True,
+                        check=False,
+                        encoding='utf-8').stdout)
             # print("There are currently " + (str(nJobs) + " queued jobs for this user"))
+
             # If there is room on the queue, break out of the loop.
             # On my account, 5 jobs can run at once (MaxJobsPU),
             # Can check by running: sacctmgr show qos format=MaxJobsPU,MaxSubmitPU
             if nJobs < MAX_JOBS:
                 break
+
+            if lazy:
+                # If there is no room in the queue and we are lazy,
+                # don't bother waiting and try again later.
+                return False
+            else:
             # Wait before trying again.
             time.sleep(WAIT_TIME)
     # On local, do nothing.
@@ -907,9 +959,14 @@ def generate_test(app, prod, index):
     # Run the test case.
     # On Voltrino, submit the SLURM script.
     if SYSTEM == "voltrino-int":
-        print("Queuing app: " + app + "\t test: " + str(index))
-        output = subprocess.run("sbatch submit.slurm", cwd=testPath, shell=True, check=False,
-                                encoding='utf-8', stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout
+        print("Queuing app: " + job.app + "\t test: " + str(index))
+        output = subprocess.run("sbatch submit.slurm",
+                                cwd=job.testPath,
+                                shell=True,
+                                check=False,
+                                encoding='utf-8',
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT).stdout
         # If the output doesn't match, something went wrong.
         if "Submitted batch job " not in output:
             print(output)
@@ -918,48 +975,61 @@ def generate_test(app, prod, index):
         # Add the queued job to our wait list.
         # We add a dictionary so we can keep track of things when we
         # handle the output later.
-        activeJobs[jobId] = {"app": app, "index": index, "path": testPath}
+        active_jobs[jobId] = {"app": job.app, "index": index, "path": job.testPath}
     # On local, run the command.
     else:
-        print("Running app: " + app + "\t test: " + str(index))
+        print("Running app: " + job.app + "\t test: " + str(index))
         start = time.time()
-        output = str(subprocess.run(command, cwd=testPath, shell=True, check=False,
-                     encoding='utf-8', stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout)
-        features[app][index]["timeTaken"] = time.time() - start
+        output = str(subprocess.run(job.command,
+                                    cwd=job.testPath,
+                                    shell=True,
+                                    check=False,
+                                    encoding='utf-8',
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT).stdout)
+        features[job.app][index]["timeTaken"] = time.time() - start
         # Save the command to file.
-        with open(testPath / "command.txt", "w+") as text_file:
-            text_file.write(command)
+        with open(job.testPath / "command.txt", "w+") as text_file:
+            text_file.write(job.command)
         # Save the output in the associated test's folder.
-        with open(testPath / "output.txt", "w+") as text_file:
+        with open(job.testPath / "output.txt", "w+") as text_file:
             text_file.write(output)
-        features = scrape_output(output, app, index)
+        features = scrape_output(output, job.app, index)
     return True
 
 
 # Handle any unfinished outputs.
-def finish_jobs(lazy=False):
-    global activeJobs
+def finish_active_jobs(lazy=False):
+    global active_jobs
     global features
 
+    if not lazy:
+        # Ensure everything generated is in the active jobs list.
+        while len(queued_jobs) > 0:
+            run_job(lazy=False)
+
     # Keep running this loop until all active jobs have completed and been parsed.
-    while len(activeJobs) > 0:
+    while len(active_jobs) > 0:
         # We want to finish a job each iteration.
-        finishedAJob = False
+        finished_a_job = False
         # Try to find a completed job in our active list.
-        for job in activeJobs:
+        for job in active_jobs:
             # If the job is done, it will not be found in the queue.
-            jobStatus = subprocess.run("squeue -j " + str(job),
-                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, check=False,
+            job_status = subprocess.run("squeue -j " + str(job),
+                                       stdout=subprocess.PIPE,
+                                       stderr=subprocess.STDOUT,
+                                       shell=True,
+                                       check=False,
                                        encoding='utf-8').stdout
             # If the job is done.
-            if "Invalid job id specified" in jobStatus \
-                    or "kmlamar" not in jobStatus:
+            if "Invalid job id specified" in job_status \
+                    or "kmlamar" not in job_status:
                 # print("Parsing output from job: " + str(job)
-                #       + "\tapp: " + activeJobs[job]["app"]
-                #       + "\ttest: " + str(activeJobs[job]["index"]))
+                #       + "\tapp: " + active_jobs[job]["app"]
+                #       + "\ttest: " + str(active_jobs[job]["index"]))
                 # Open the file with the completed job.
                 try:
-                    f = open(activeJobs[job]["path"] / ("slurm-" + str(job) + ".out"), "r")
+                    f = open(active_jobs[job]["path"] / ("slurm-" + str(job) + ".out"), "r")
                     output = f.read()
                 except IOError:
                     # The file likely doesn't exist yet.
@@ -969,31 +1039,37 @@ def finish_jobs(lazy=False):
                     f.close()
                 # Parse the output.
                 features = scrape_output(
-                    output, activeJobs[job]["app"], activeJobs[job]["index"])
+                    output, active_jobs[job]["app"], active_jobs[job]["index"])
                 # Report an error to screen.
-                if("error" in features[activeJobs[job]["app"]][activeJobs[job]["index"]]):
-                    print(str(activeJobs[job]["app"]) + " " + str(activeJobs[job]["index"])+ ": " + str(features[activeJobs[job]["app"]][activeJobs[job]["index"]]["error"]))
+                if("error" in features[active_jobs[job]["app"]][active_jobs[job]["index"]]):
+                    print(str(active_jobs[job]["app"]) + " " + str(active_jobs[job]["index"])+ ": " + str(features[active_jobs[job]["app"]][active_jobs[job]["index"]]["error"]))
                 else:
-                    print(str(activeJobs[job]["app"]) + " " + str(activeJobs[job]["index"])+ ": Completed!")
+                    print(str(active_jobs[job]["app"]) + " " + str(active_jobs[job]["index"])+ ": Completed!")
                     pass
                 # Save the output of this job to file.
-                append_test(activeJobs[job]["app"], activeJobs[job]["index"])
+                append_test(active_jobs[job]["app"], active_jobs[job]["index"])
                 # The job has been parsed. Remove it from the list.
-                activeJobs.pop(job)
+                active_jobs.pop(job)
                 # We successfully finished a job.
-                finishedAJob = True
+                finished_a_job = True
                 # We have found our job in the for loop.
                 # Break out and start the search again.
                 break
-        # If we went through the whole queue and all remaining jobs were still active.
-        if not finishedAJob:
+        if finished_a_job:
+            # TODO: Queue another job.
+            pass
+        else: # If we went through the whole queue and all remaining jobs were still active.
             # If we are lazily finishing jobs.
             if lazy:
                 # Don't bother waiting. Break out now and come back later.
                 break
             # Print the contents of the remaining queue.
-            print(subprocess.run("squeue -u kmlamar", stdout=subprocess.PIPE,
-                  stderr=subprocess.STDOUT, shell=True, check=False, encoding='utf-8').stdout)
+            print(subprocess.run("squeue -u kmlamar",
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT,
+                                 shell=True,
+                                 check=False,
+                                 encoding='utf-8').stdout)
             # Wait before trying again.
             time.sleep(WAIT_TIME)
 
@@ -1006,19 +1082,19 @@ def adjust_params():
     global df
 
     # Loop through each Proxy App.
-    for app in enabledApps:
+    for app in enabled_apps:
         # Some apps are very particular.
         # Don't bother with them and stick to randomly generated tests only.
         if app == "sw4lite" or app == "miniAMR":
             continue
         # Identify where we left off, in case we already have some results.
-        resumeIndex = get_next_index(app)
+        resume_index = get_next_index(app)
         # Loop through each combination of parameter changes.
         # prod is the cartesian product of our adjusted parameters.
-        for index, prod in enumerate((dict(zip(rangeParams[app], x)) for
-                                      x in product(*rangeParams[app].values()))):
+        for index, prod in enumerate((dict(zip(range_params[app], x)) for
+                                      x in product(*range_params[app].values()))):
             # Skip iterations until we reach the target starting index.
-            if resumeIndex > index:
+            if resume_index > index:
                 continue
             # Test skips and input hacks.
             if app.startswith("ExaMiniMD"):
@@ -1086,50 +1162,53 @@ def adjust_params():
 
             generate_test(app, prod, index)
             # Try to finish jobs part-way.
-            finish_jobs(lazy=True)
+            finish_active_jobs(lazy=True)
 
-    finish_jobs()
+    finish_active_jobs()
 
 # TODO: Sweep through this to identify heavy sw4lite parameters to avoid.
 # NOTE: Some of these parameters may do nothing in a narrow sweep like this.
 def narrow_params():
     global features
     # Loop through each Proxy App.
-    for app in enabledApps:
-        index = 0
-        # For each parameter that can be changed, based on our rangeParams list.
-        for param in rangeParams[app]:
+    for app in enabled_apps:
+        # For each parameter that can be changed, based on our range_params list.
+        for param in range_params[app]:
             # Get the default parameters, which we will adjust slightly.
-            params = copy.copy(defaultParams[app])
+            params = copy.copy(default_params[app])
             # For each valid choice for this parameter.
-            for choice in rangeParams[app][param]:
+            for choice in range_params[app][param]:
                 # Skip this choice if it's already the default.
-                if choice == defaultParams[app][param]:
+                if choice == default_params[app][param]:
                     continue
                 # Replace the default with this choice.
                 params[param] = choice
+                # Run each test multiple times.
+                for i in range(REPEAT_COUNT):
+                    # Get the index to save the test files.
+                    index = get_next_index(app)
                 # Run the test.
                 generate_test(app, params, index)
-                index += 1
                 # Try to finish jobs part-way.
-                finish_jobs(lazy=True)
-    finish_jobs()
+                finish_active_jobs(lazy=True)
+    finish_active_jobs()
 
 # Read an existing DataFrame back from a saved CSV.
 def read_df():
     global df
 
     # For each app.
-    for app in enabledApps:
+    for app in enabled_apps:
         # Open the existing CSV.
         df[app] = pd.read_csv("./tests/" + app + "dataset.csv",
-                              sep=",", header=0, index_col=0, engine="c", quotechar="\"")
+                              sep=",", header=0, index_col=0,
+                              engine="c", quotechar="\"")
     return
 
 
 def rand_param(app, param, values=''):
     if values == '':
-        values = rangeParams[app][param]
+        values = range_params[app][param]
     # If it is a boolean
     if isinstance(values[-1], bool):
         # Pick one of the values at random.
@@ -1173,7 +1252,7 @@ def get_params(app):
         params["tasks"] = nextPow2(params["tasks"])
 
     if app == "sw4lite":
-        if random.choice(rangeParams[app]["fileio"]):
+        if random.choice(range_params[app]["fileio"]):
             params["fileio"] = True
             params["fileioverbose"] = rand_param(app, "fileioverbose")
             params["fileioprintcycle"] = rand_param(app, "fileioprintcycle")
@@ -1235,7 +1314,7 @@ def get_params(app):
         else:
             params["timesteps"] = rand_param(app, "timesteps")
 
-        if random.choice(rangeParams[app]["supergrid"]):
+        if random.choice(range_params[app]["supergrid"]):
             params["supergrid"] = True
             params["supergridgp"] = rand_param(app, "supergridgp")
             params["supergriddc"] = rand_param(app, "supergriddc")
@@ -1313,7 +1392,7 @@ def get_params(app):
         if params["sourcetype"] != "Dirac":
             params["sourcefreq"] = rand_param(app, "sourcefreq")
 
-        if random.choice(rangeParams[app]["topography"]):
+        if random.choice(range_params[app]["topography"]):
             params["topography"] = True
             params["topographyinput"] = rand_param(app, "topographyinput")
             params["topographyzmax"] = rand_param(app, "topographyzmax")
@@ -1329,7 +1408,7 @@ def get_params(app):
         else:
             params["topography"] = False
 
-        if random.choice(rangeParams[app]["block"]):
+        if random.choice(range_params[app]["block"]):
             params["block"] = True
             params["blockvp"] = rand_param(app, "blockvp")
             params["blockvs"] = rand_param(app, "blockvs")
@@ -1372,7 +1451,7 @@ def get_params(app):
         else:
             params["block"] = False
 
-        if random.choice(rangeParams[app]["rec"]):
+        if random.choice(range_params[app]["rec"]):
             params["rec"] = True
             if random.choice(range(2)):
                 params["recx"] = rand_param(app, "recx", [0.0, xMax])
@@ -1484,7 +1563,7 @@ def get_params(app):
         params["--permute"] = rand_param(app, "--permute")
         params["--code"] = rand_param(app, "--code")
         params["--checksum_freq"] = rand_param(app, "--checksum_freq")
-        params["--stencil"] = random.choice(rangeParams["miniAMR"]["--stencil"])
+        params["--stencil"] = random.choice(range_params["miniAMR"]["--stencil"])
         params["--error_tol"] = rand_param(app, "--error_tol")
         params["--report_diffusion"] = rand_param(app, "--report_diffusion")
         params["--report_perf"] = rand_param(app, "--report_perf")
@@ -1517,20 +1596,20 @@ def get_params(app):
     # The default case just picks parameters at random within a range.
     else:
         # For each parameter:
-        for param, values in rangeParams[app].items():
+        for param, values in range_params[app].items():
             params[param] = rand_param(app, param)
     
     # Explicitly fill in unused parameters with None.
     # This is important to ensure default values aren't used,
     # to ensure CSV alignment, and to have some default value to train on.
-    for param, values in rangeParams[app].items():
+    for param, values in range_params[app].items():
         if param not in params:
             params[param] = None
 
     return params
 
 
-# Run random permutations of tests outside of the specific set of tests we have defined.
+# Run random permutations of tests.
 # This extra variety helps training.
 def random_tests():
     global terminate
@@ -1539,17 +1618,19 @@ def random_tests():
     # While we have not canceled the test:
     while not terminate:
         # Pick a random app.
-        app = random.choice(list(enabledApps))
-        # Get the index to save the test files.
-        index = get_next_index(app)
+        app = random.choice(list(enabled_apps))
         # Get the parameters.
         params = get_params(app)
+        # Run each test multiple times.
+        for i in range(REPEAT_COUNT):
+        # Get the index to save the test files.
+        index = get_next_index(app)
         # Run the test.
         generate_test(app, params, index)
         # Try to finish jobs.
-        finish_jobs(lazy=True)
+        finish_active_jobs(lazy=True)
         # If we want to terminate, we can't be lazy. Be sure all jobs complete.
-    finish_jobs(lazy=False)
+    finish_active_jobs(lazy=False)
     signal.signal(signal.SIGINT, original_sigint)
 
 # Train and test a regressor on a dataset.
@@ -1599,7 +1680,8 @@ def regression(regressor, modelName, X, y):
         scoring="neg_mean_squared_error",
         cv=5,
         n_jobs=-1,
-        # return_times=True, # May be useful for training and testing run time measurements.
+        # May be useful for training and testing run time measurements.
+        # return_times=True,
     )
     plt.figure()
     plt.plot(train_sizes, -test_scores.mean(1), label=str(modelName))
@@ -1622,6 +1704,12 @@ def regression(regressor, modelName, X, y):
 
 def get_pipeline(preprocessor, clf):
     return Pipeline(steps=[("preprocessor", preprocessor), ("classifier", clf)])
+
+
+# TODO: Accumulatively multiply each numeric column into a new, single column.
+# Specialized for SWFFT.
+def multiply_and_merge(X):
+    return X
 
 
 def run_regressors(X, y, preprocessor, app=""):
@@ -1664,8 +1752,9 @@ def run_regressors(X, y, preprocessor, app=""):
         layers = tuple(100 for _ in range(i))
         futures.append(executor.submit(regression, get_pipeline(preprocessor, MLPRegressor(activation="relu", hidden_layer_sizes=layers, random_state=1, max_iter=500)), str(i)+" MLP Regressor relu "+app, X, y))
 
-        i = 4
-        futures.append(executor.submit(regression, get_pipeline(preprocessor, KNeighborsRegressor(n_neighbors=i)), str(i)+" Nearest Neighbors Regressor "+app, X, y))
+        # TODO: Adapt this into an equation-based solver, where we are just finding the coefficients.
+        # if app == "SWFFT":
+        #     futures.append(executor.submit(regression, get_pipeline(preprocessor, LinearRegression()), "Linear Regressor "+app, multiply_and_merge(X), y))
 
         for future in futures:
             ret += future.result()
@@ -1682,7 +1771,7 @@ def ml():
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=48) as executor:
         futures = []
-        for app in enabledApps:
+        for app in enabled_apps:
             # Test with and without baseline.
             for baseline in [True, False]:
                 # Print the app name, so we keep track of which one is being worked on.
@@ -1828,10 +1917,10 @@ def ml():
 def base_test():
     app = "sw4lite"
 
-    params = copy.copy(defaultParams[app])
+    params = copy.copy(default_params[app])
     generate_test(app, params, get_next_index(app))
 
-    finish_jobs()
+    finish_active_jobs()
 
 
 def main():
@@ -1847,9 +1936,10 @@ def main():
         # adjust_params()
         # narrow_params()
         # Run tests at random indefinitely.
+        random_tests()
         pass
     # Perform machine learning.
-    # ml()
+    #ml()
 
 
 def exit_gracefully(signum, frame):
