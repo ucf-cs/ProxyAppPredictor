@@ -350,7 +350,7 @@ default_params["sw4lite"] = {"grid": True,
                             "dgalerkinsinglemode": None,
                             "nodes": 4,
                             "tasks": 32}
-range_params["sw4lite"] = {  # Done
+range_params["sw4lite"] = {# Done
                             "fileio": [False, True],
                             "fileiopath": [None],
                             "fileioverbose": [0, 5],
@@ -908,9 +908,9 @@ def queue_job(index, testPath, app, command):
     while len(queued_jobs) > MAX_QUEUE:
         run_job(lazy=False)
 
-    queued_jobs[index] = {testPath: testPath,
-                          app:      app,
-                          command:  command}
+    queued_jobs[index] = {"testPath": testPath,
+                          "app":      app,
+                          "command":  command}
     run_job(lazy=True)
     pass
 
@@ -924,9 +924,6 @@ def run_job(index=0, lazy=False):
     else:
         # If index = 0, pick a job at random from the queue.
         index, job = random.choice(list(queued_jobs.items()))
-
-    # Remove the job from the list.
-    queued_jobs.pop(index)
 
     # Wait until the test is ready to run.
     # On Voltrino, wait until the queue empties a bit.
@@ -952,6 +949,9 @@ def run_job(index=0, lazy=False):
                 # don't bother waiting and try again later.
                 return False
             else:
+                # DEBUG
+                # print(str(len(queued_jobs)) + " jobs in queue.")
+
             # Wait before trying again.
             time.sleep(WAIT_TIME)
     # On local, do nothing.
@@ -959,9 +959,9 @@ def run_job(index=0, lazy=False):
     # Run the test case.
     # On Voltrino, submit the SLURM script.
     if SYSTEM == "voltrino-int":
-        print("Queuing app: " + job.app + "\t test: " + str(index))
+        print("Queuing app: " + job["app"] + "\t test: " + str(index))
         output = subprocess.run("sbatch submit.slurm",
-                                cwd=job.testPath,
+                                cwd=job["testPath"],
                                 shell=True,
                                 check=False,
                                 encoding='utf-8',
@@ -975,26 +975,30 @@ def run_job(index=0, lazy=False):
         # Add the queued job to our wait list.
         # We add a dictionary so we can keep track of things when we
         # handle the output later.
-        active_jobs[jobId] = {"app": job.app, "index": index, "path": job.testPath}
+        active_jobs[jobId] = {"app": job["app"], "index": index, "path": job["testPath"]}
     # On local, run the command.
     else:
-        print("Running app: " + job.app + "\t test: " + str(index))
+        print("Running app: " + job["app"] + "\t test: " + str(index))
         start = time.time()
-        output = str(subprocess.run(job.command,
-                                    cwd=job.testPath,
+        output = str(subprocess.run(job["command"],
+                                    cwd=job["testPath"],
                                     shell=True,
                                     check=False,
                                     encoding='utf-8',
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT).stdout)
-        features[job.app][index]["timeTaken"] = time.time() - start
+        features[job["app"]][index]["timeTaken"] = time.time() - start
         # Save the command to file.
-        with open(job.testPath / "command.txt", "w+") as text_file:
-            text_file.write(job.command)
+        with open(job["testPath"] / "command.txt", "w+") as text_file:
+            text_file.write(job["command"])
         # Save the output in the associated test's folder.
-        with open(job.testPath / "output.txt", "w+") as text_file:
+        with open(job["testPath"] / "output.txt", "w+") as text_file:
             text_file.write(output)
-        features = scrape_output(output, job.app, index)
+        features = scrape_output(output, job["app"], index)
+    
+    # Remove the job from the list.
+    queued_jobs.pop(index)
+
     return True
 
 
