@@ -1,4 +1,4 @@
-"""A comprehensive script for generating, testing, and parsing inputs for a 
+"""A comprehensive script for generating, testing, and parsing inputs for a
 variety of Proxy Apps, both locally and on the Voltrino HPC testbed.
 """
 
@@ -28,10 +28,10 @@ from sklearn import linear_model
 from sklearn import svm
 from sklearn import metrics
 from sklearn import tree
-from sklearn.compose import ColumnTransformer
+# from sklearn.compose import ColumnTransformer
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.impute import SimpleImputer
+# from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LinearRegression
 from sklearn.linear_model import SGDRegressor
 from sklearn.model_selection import cross_val_score
@@ -42,7 +42,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import make_pipeline
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from complete.complete_regressor import CompleteRegressor
+# from complete.complete_regressor import CompleteRegressor
 import matplotlib.pyplot as plt
 
 pd.options.mode.chained_assignment = None
@@ -89,548 +89,548 @@ SKIP_TESTS = True
 terminate = False
 
 SNAP_FILE = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia.gov CITATION: Thompson, Swiler, Trott, Foiles and Tucker, arxiv.org, 1409.3880 (2014)\n'
-            '\n'
-            '# Definition of SNAP potential Ta_Cand06A\n'
-            '# Assumes 1 LAMMPS atom type\n'
-            '\n'
-            'variable zblcutinner equal 4\n'
-            'variable zblcutouter equal 4.8\n'
-            'variable zblz equal 73\n'
-            '\n'
-            '# Specify hybrid with SNAP, ZBL\n'
-            '\n'
-            'pair_style hybrid/overlay &\n'
-            'zbl ${zblcutinner} ${zblcutouter} &\n'
-            'snap\n'
-            'pair_coeff 1 1 zbl ${zblz} ${zblz}\n'
-            'pair_coeff * * snap Ta06A.snapcoeff Ta Ta06A.snapparam Ta\n')
+             '\n'
+             '# Definition of SNAP potential Ta_Cand06A\n'
+             '# Assumes 1 LAMMPS atom type\n'
+             '\n'
+             'variable zblcutinner equal 4\n'
+             'variable zblcutouter equal 4.8\n'
+             'variable zblz equal 73\n'
+             '\n'
+             '# Specify hybrid with SNAP, ZBL\n'
+             '\n'
+             'pair_style hybrid/overlay &\n'
+             'zbl ${zblcutinner} ${zblcutouter} &\n'
+             'snap\n'
+             'pair_coeff 1 1 zbl ${zblz} ${zblz}\n'
+             'pair_coeff * * snap Ta06A.snapcoeff Ta Ta06A.snapparam Ta\n')
 SNAPCOEFF_FILE = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia.gov CITATION: Thompson, Swiler, Trott, Foiles and Tucker, arxiv.org, 1409.3880 (2014)\n'
-                 '\n'
-                 '# LAMMPS SNAP coefficients for Ta_Cand06A\n'
-                 '\n'
-                 '1 31\n'
-                 'Ta 0.5 1\n'
-                 '-2.92477\n'
-                 '-0.01137\n'
-                 '-0.00775\n'
-                 '-0.04907\n'
-                 '-0.15047\n'
-                 '0.09157\n'
-                 '0.05590\n'
-                 '0.05785\n'
-                 '-0.11615\n'
-                 '-0.17122\n'
-                 '-0.10583\n'
-                 '0.03941\n'
-                 '-0.11284\n'
-                 '0.03939\n'
-                 '-0.07331\n'
-                 '-0.06582\n'
-                 '-0.09341\n'
-                 '-0.10587\n'
-                 '-0.15497\n'
-                 '0.04820\n'
-                 '0.00205\n'
-                 '0.00060\n'
-                 '-0.04898\n'
-                 '-0.05084\n'
-                 '-0.03371\n'
-                 '-0.01441\n'
-                 '-0.01501\n'
-                 '-0.00599\n'
-                 '-0.06373\n'
-                 '0.03965\n'
-                 '0.01072\n')
+                  '\n'
+                  '# LAMMPS SNAP coefficients for Ta_Cand06A\n'
+                  '\n'
+                  '1 31\n'
+                  'Ta 0.5 1\n'
+                  '-2.92477\n'
+                  '-0.01137\n'
+                  '-0.00775\n'
+                  '-0.04907\n'
+                  '-0.15047\n'
+                  '0.09157\n'
+                  '0.05590\n'
+                  '0.05785\n'
+                  '-0.11615\n'
+                  '-0.17122\n'
+                  '-0.10583\n'
+                  '0.03941\n'
+                  '-0.11284\n'
+                  '0.03939\n'
+                  '-0.07331\n'
+                  '-0.06582\n'
+                  '-0.09341\n'
+                  '-0.10587\n'
+                  '-0.15497\n'
+                  '0.04820\n'
+                  '0.00205\n'
+                  '0.00060\n'
+                  '-0.04898\n'
+                  '-0.05084\n'
+                  '-0.03371\n'
+                  '-0.01441\n'
+                  '-0.01501\n'
+                  '-0.00599\n'
+                  '-0.06373\n'
+                  '0.03965\n'
+                  '0.01072\n')
 SNAPPARAM_FILE = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia.gov CITATION: Thompson, Swiler, Trott, Foiles and Tucker, arxiv.org, 1409.3880 (2014)\n'
-                 '\n'
-                 '# LAMMPS SNAP parameters for Ta_Cand06A\n'
-                 '\n'
-                 '# required\n'
-                 'rcutfac 4.67637\n'
-                 'twojmax 6\n'
-                 '\n'
-                 '# optional\n'
-                 '\n'
-                 'rfac0 0.99363\n'
-                 'rmin0 0\n'
-                 'diagonalstyle 3\n'
-                 'bzeroflag 0\n'
-                 'quadraticflag 0\n')
+                  '\n'
+                  '# LAMMPS SNAP parameters for Ta_Cand06A\n'
+                  '\n'
+                  '# required\n'
+                  'rcutfac 4.67637\n'
+                  'twojmax 6\n'
+                  '\n'
+                  '# optional\n'
+                  '\n'
+                  'rfac0 0.99363\n'
+                  'rmin0 0\n'
+                  'diagonalstyle 3\n'
+                  'bzeroflag 0\n'
+                  'quadraticflag 0\n')
 
 # A set of sane defaults based on 3d Lennard-Jones melt (in.lj).
 default_params["ExaMiniMDbase"] = {"units": "lj",
-                                  "lattice": "fcc",
-                                  "lattice_constant": 0.8442,
-                                  "lattice_offset_x": 0.0,
-                                  "lattice_offset_y": 0.0,
-                                  "lattice_offset_z": 0.0,
-                                  "lattice_nx": 40,
-                                  "lattice_ny": 40,
-                                  "lattice_nz": 40,
-                                  "ntypes": 1,
-                                  "type": 1,
-                                  "mass": 2.0,
-                                  "force_type": "lj/cut",
-                                  "force_cutoff": 2.5,
-                                  "temperature_target": 1.4,
-                                  "temperature_seed": 87287,
-                                  "neighbor_skin": 0.3,
-                                  "comm_exchange_rate": 20,
-                                  "thermo_rate": 10,
-                                  "dt": 0.005,
-                                  "comm_newton": "off",
-                                  "nsteps": 100,
-                                  "nodes": 4,
-                                  "tasks": 32}
+                                   "lattice": "fcc",
+                                   "lattice_constant": 0.8442,
+                                   "lattice_offset_x": 0.0,
+                                   "lattice_offset_y": 0.0,
+                                   "lattice_offset_z": 0.0,
+                                   "lattice_nx": 40,
+                                   "lattice_ny": 40,
+                                   "lattice_nz": 40,
+                                   "ntypes": 1,
+                                   "type": 1,
+                                   "mass": 2.0,
+                                   "force_type": "lj/cut",
+                                   "force_cutoff": 2.5,
+                                   "temperature_target": 1.4,
+                                   "temperature_seed": 87287,
+                                   "neighbor_skin": 0.3,
+                                   "comm_exchange_rate": 20,
+                                   "thermo_rate": 10,
+                                   "dt": 0.005,
+                                   "comm_newton": "off",
+                                   "nsteps": 100,
+                                   "nodes": 4,
+                                   "tasks": 32}
 range_params["ExaMiniMDbase"] = {"force_type": ["lj/cut"],
-                                "lattice_nx": [1, 5, 26],
-                                "lattice_ny": [1, 5, 26],
-                                "lattice_nz": [1, 5, 26],
-                                "dt": [0.0001, 0.0005, 0.001, 0.005, 1.0, 2.0],
-                                "nsteps": [0, 10, 100, 1000],
-                                "nodes": [1, 4],
-                                "tasks": [1, 32]}
+                                 "lattice_nx": [1, 5, 26],
+                                 "lattice_ny": [1, 5, 26],
+                                 "lattice_nz": [1, 5, 26],
+                                 "dt": [0.0001, 0.0005, 0.001, 0.005, 1.0, 2.0],
+                                 "nsteps": [0, 10, 100, 1000],
+                                 "nodes": [1, 4],
+                                 "tasks": [1, 32]}
 default_params["ExaMiniMDsnap"] = {"units": "metal",
-                                  "lattice": "sc",
-                                  "lattice_constant": 3.316,
-                                  "lattice_offset_x": 0.0,
-                                  "lattice_offset_y": 0.0,
-                                  "lattice_offset_z": 0.0,
-                                  "lattice_nx": 20,
-                                  "lattice_ny": 20,
-                                  "lattice_nz": 20,
-                                  "ntypes": 1,
-                                  "type": 1,
-                                  "mass": 180.88,
-                                  "force_type": "snap",
-                                  "force_cutoff": None,
-                                  "temperature_target": 300.0,
-                                  "temperature_seed": 4928459,
-                                  "neighbor_skin": 1.0,
-                                  "comm_exchange_rate": 1,
-                                  "thermo_rate": 5,
-                                  "dt": 0.0005,
-                                  "comm_newton": "on",
-                                  "nsteps": 100,
-                                  "nodes": 4,
-                                  "tasks": 32}
+                                   "lattice": "sc",
+                                   "lattice_constant": 3.316,
+                                   "lattice_offset_x": 0.0,
+                                   "lattice_offset_y": 0.0,
+                                   "lattice_offset_z": 0.0,
+                                   "lattice_nx": 20,
+                                   "lattice_ny": 20,
+                                   "lattice_nz": 20,
+                                   "ntypes": 1,
+                                   "type": 1,
+                                   "mass": 180.88,
+                                   "force_type": "snap",
+                                   "force_cutoff": None,
+                                   "temperature_target": 300.0,
+                                   "temperature_seed": 4928459,
+                                   "neighbor_skin": 1.0,
+                                   "comm_exchange_rate": 1,
+                                   "thermo_rate": 5,
+                                   "dt": 0.0005,
+                                   "comm_newton": "on",
+                                   "nsteps": 100,
+                                   "nodes": 4,
+                                   "tasks": 32}
 range_params["ExaMiniMDsnap"] = {"force_type": ["snap"],
-                                "lattice_nx": [1, 5, 26],
-                                "lattice_ny": [1, 5, 26],
-                                "lattice_nz": [1, 5, 26],
-                                "dt": [0.0001, 0.0005, 0.001],
-                                "nsteps": [0, 10, 100, 1000],
-                                "nodes": [1, 4],
-                                "tasks": [1, 32]}
+                                 "lattice_nx": [1, 5, 26],
+                                 "lattice_ny": [1, 5, 26],
+                                 "lattice_nz": [1, 5, 26],
+                                 "dt": [0.0001, 0.0005, 0.001],
+                                 "nsteps": [0, 10, 100, 1000],
+                                 "nodes": [1, 4],
+                                 "tasks": [1, 32]}
 
 default_params["SWFFT"] = {"n_repetitions": 1,
-                          "ngx": 512,
-                          "ngy": None,
-                          "ngz": None,
-                          "nodes": 4,
-                          "tasks": 32}
+                           "ngx": 512,
+                           "ngy": None,
+                           "ngz": None,
+                           "nodes": 4,
+                           "tasks": 32}
 range_params["SWFFT"] = {"n_repetitions": [1, 2, 4, 8, 16, 64],
-                        "ngx": [256, 512, 1024],
-                        "ngy": [None, 256, 512, 1024],
-                        "ngz": [None, 256, 512, 1024],
-                        "nodes": [1, 4],
-                        "tasks": [1, 31]}
+                         "ngx": [256, 512, 1024],
+                         "ngy": [None, 256, 512, 1024],
+                         "ngz": [None, 256, 512, 1024],
+                         "nodes": [1, 4],
+                         "tasks": [1, 31]}
 
 default_params["sw4lite"] = {"grid": True,
-                            "gridny": None,
-                            "gridnx": None,
-                            "gridnz": None,
-                            "gridx": 1.27,
-                            "gridy": 1.27,
-                            "gridz": 19.99,
-                            "gridh": 0.003,
-                            "developer": True,
-                            "developercfl": None,
-                            "developercheckfornan": 0,
-                            "developerreporttiming": 1,
-                            "developertrace": None,
-                            "developerthblocki": None,
-                            "developerthblockj": None,
-                            "developerthblockk": None,
-                            "developercorder": 0,
-                            "topography": False,
-                            "topographyzmax": 1.0,
-                            "topographyorder": 6,
-                            "topographyzetabreak": None,
-                            "topographyinput": "gaussian",
-                            "topographyfile": None,
-                            "topographygaussianAmp": 0.1,
-                            "topographygaussianXc": -.6,
-                            "topographygaussianYc": 0.4,
-                            "topographygaussianLx": 0.15,
-                            "topographygaussianLy": 0.10,
-                            "topographyanalyticalMetric": None,
-                            "fileio": True,
-                            "fileiopath": "gaussianHill-h0p01",
-                            "fileioverbose": None,
-                            "fileioprintcycle": None,
-                            "fileiopfs": None,
-                            "fileionwriters": None,
-                            "time": True,
-                            # Note: Multiple time instantiations in example file.
-                            "timet": 3.0,
-                            "timesteps": 5,
-                            "source": True,
-                            "sourcem0": None,
-                            "sourcex": 0.52,
-                            "sourcey": 0.48,
-                            "sourcez": None,
-                            "sourcedepth": 0.2,
-                            "sourceMxx": None,
-                            "sourceMxy": 0.87,
-                            "sourceMxz": None,
-                            "sourceMyy": None,
-                            "sourceMyz": None,
-                            "sourceMzz": None,
-                            "sourceFz": None,
-                            "sourceFx": None,
-                            "sourceFy": None,
-                            "sourcet0": 0.36,
-                            "sourcefreq": 16.6667,
-                            "sourcef0": None,
-                            "sourcetype": "Gaussian",
-                            "supergrid": True,
-                            "supergridgp": 30,
-                            "supergriddc": None,
-                            "testpointsource": False,
-                            "testpointsourcecp": None,
-                            "testpointsourcecs": None,
-                            "testpointsourcerho": None,
-                            "testpointsourcediractest": None,
-                            "testpointsourcehalfspace": None,
-                            "checkpoint": False,
-                            "checkpointtime": None,
-                            "checkpointtimeInterval": None,
-                            "checkpointcycle": None,
-                            "checkpointcycleInterval": None,
-                            "checkpointfile": None,
-                            "checkpointbufsize": None,
-                            "restart": False,
-                            "restartfile": None,
-                            "restartbufsize": None,
-                            "rec": True,
-                            "recx": 0.7,
-                            "recy": 0.6,
-                            "reclat": None,
-                            "reclon": None,
-                            "recz": None,
-                            "recdepth": 0,
-                            "rectopodepth": None,
-                            "recfile": "sta01",
-                            "recsta": None,
-                            "recnsew": None,
-                            "recwriteEvery": None,
-                            "recusgsformat": 1,
-                            "recsacformat": 0,
-                            "recvariables": None,
-                            "block": True,
-                            "blockrhograd": None,
-                            "blockvpgrad": None,
-                            "blockvsgrad": None,
-                            "blockvp": 2.0,
-                            "blockvs": 1.0,
-                            "blockrho": None,
-                            "blockr": 1.5,
-                            "blockQs": None,
-                            "blockQp": None,
-                            "blockabsdepth": None,
-                            "blockx1": None,
-                            "blockx2": None,
-                            "blocky1": None,
-                            "blocky2": None,
-                            "blockz1": None,
-                            "blockz2": None,
-                            "dgalerkin": None,
-                            "dgalerkinorder": None,
-                            "dgalerkinsinglemode": None,
-                            "nodes": 4,
-                            "tasks": 32}
+                             "gridny": None,
+                             "gridnx": None,
+                             "gridnz": None,
+                             "gridx": 1.27,
+                             "gridy": 1.27,
+                             "gridz": 19.99,
+                             "gridh": 0.003,
+                             "developer": True,
+                             "developercfl": None,
+                             "developercheckfornan": 0,
+                             "developerreporttiming": 1,
+                             "developertrace": None,
+                             "developerthblocki": None,
+                             "developerthblockj": None,
+                             "developerthblockk": None,
+                             "developercorder": 0,
+                             "topography": False,
+                             "topographyzmax": 1.0,
+                             "topographyorder": 6,
+                             "topographyzetabreak": None,
+                             "topographyinput": "gaussian",
+                             "topographyfile": None,
+                             "topographygaussianAmp": 0.1,
+                             "topographygaussianXc": -.6,
+                             "topographygaussianYc": 0.4,
+                             "topographygaussianLx": 0.15,
+                             "topographygaussianLy": 0.10,
+                             "topographyanalyticalMetric": None,
+                             "fileio": True,
+                             "fileiopath": "gaussianHill-h0p01",
+                             "fileioverbose": None,
+                             "fileioprintcycle": None,
+                             "fileiopfs": None,
+                             "fileionwriters": None,
+                             "time": True,
+                             # Note: Multiple time instantiations in example file.
+                             "timet": 3.0,
+                             "timesteps": 5,
+                             "source": True,
+                             "sourcem0": None,
+                             "sourcex": 0.52,
+                             "sourcey": 0.48,
+                             "sourcez": None,
+                             "sourcedepth": 0.2,
+                             "sourceMxx": None,
+                             "sourceMxy": 0.87,
+                             "sourceMxz": None,
+                             "sourceMyy": None,
+                             "sourceMyz": None,
+                             "sourceMzz": None,
+                             "sourceFz": None,
+                             "sourceFx": None,
+                             "sourceFy": None,
+                             "sourcet0": 0.36,
+                             "sourcefreq": 16.6667,
+                             "sourcef0": None,
+                             "sourcetype": "Gaussian",
+                             "supergrid": True,
+                             "supergridgp": 30,
+                             "supergriddc": None,
+                             "testpointsource": False,
+                             "testpointsourcecp": None,
+                             "testpointsourcecs": None,
+                             "testpointsourcerho": None,
+                             "testpointsourcediractest": None,
+                             "testpointsourcehalfspace": None,
+                             "checkpoint": False,
+                             "checkpointtime": None,
+                             "checkpointtimeInterval": None,
+                             "checkpointcycle": None,
+                             "checkpointcycleInterval": None,
+                             "checkpointfile": None,
+                             "checkpointbufsize": None,
+                             "restart": False,
+                             "restartfile": None,
+                             "restartbufsize": None,
+                             "rec": True,
+                             "recx": 0.7,
+                             "recy": 0.6,
+                             "reclat": None,
+                             "reclon": None,
+                             "recz": None,
+                             "recdepth": 0,
+                             "rectopodepth": None,
+                             "recfile": "sta01",
+                             "recsta": None,
+                             "recnsew": None,
+                             "recwriteEvery": None,
+                             "recusgsformat": 1,
+                             "recsacformat": 0,
+                             "recvariables": None,
+                             "block": True,
+                             "blockrhograd": None,
+                             "blockvpgrad": None,
+                             "blockvsgrad": None,
+                             "blockvp": 2.0,
+                             "blockvs": 1.0,
+                             "blockrho": None,
+                             "blockr": 1.5,
+                             "blockQs": None,
+                             "blockQp": None,
+                             "blockabsdepth": None,
+                             "blockx1": None,
+                             "blockx2": None,
+                             "blocky1": None,
+                             "blocky2": None,
+                             "blockz1": None,
+                             "blockz2": None,
+                             "dgalerkin": None,
+                             "dgalerkinorder": None,
+                             "dgalerkinsinglemode": None,
+                             "nodes": 4,
+                             "tasks": 32}
 range_params["sw4lite"] = {# Done
-                            "fileio": [False, True],
-                            "fileiopath": [None],
-                            "fileioverbose": [0, 5],
-                            "fileioprintcycle": [1, 100],
-                            "fileiopfs": [None],
-                            "fileionwriters": [None],
-                            # Done
-                            "grid": [True],
-                            "gridny": [0.001, 1.0],
-                            "gridnx": [0.001, 1.0],
-                            "gridnz": [0.001, 1.0],
-                            "gridx": [0.001, 1.0],
-                            "gridy": [0.001, 1.0],
-                            "gridz": [0.001, 1.0],
-                            "gridh": [0.001, 1.0],
-                            # Done
-                            "time": [True],
-                            "timet": [0.1, 1.0],
-                            "timesteps": [1, 5],
-                            # Done
-                            "supergrid": [True],
-                            "supergridgp": [5, 30],
-                            "supergriddc": [0.01, 0.02, 0.05],
-                            # Done
-                            "source": [True],
-                            "sourcem0": [0.0, 1.0],
-                            "sourcex": [0.0, 1.0],
-                            "sourcey": [0.0, 1.0],
-                            "sourcez": [0.0, 1.0],
-                            "sourcedepth": [0.0, 1.0],
-                            "sourceMxx": [-1.0, 1.0],
-                            "sourceMxy": [-1.0, 1.0],
-                            "sourceMxz": [-1.0, 1.0],
-                            "sourceMyy": [-1.0, 1.0],
-                            "sourceMyz": [-1.0, 1.0],
-                            "sourceMzz": [-1.0, 1.0],
-                            "sourceFz": [-1.0, 1.0],
-                            "sourceFx": [-1.0, 1.0],
-                            "sourceFy": [-1.0, 1.0],
-                            "sourcet0": [0.01, 0.50],
-                            "sourcefreq": [0.1, 20.0],
-                            "sourcef0": [0.0, 5.0],
-                            "sourcetype": ["Ricker", "Gaussian", "Ramp", "Triangle", "Sawtooth", "SmoothWave", "Erf", "GaussianInt", "VerySmoothBump", "RickerInt", "Brune", "BruneSmoothed", "DBrune", "GaussianWindow", "Liu", "Dirac", "C6SmoothBump"],
-                            # Done
-                            "block": [False, True],
-                            "blockrhograd": [0.1, 2.0],
-                            "blockvpgrad": [0.1, 2.0],
-                            "blockvsgrad": [0.1, 2.0],
-                            "blockvp": [0.1, 2.0],
-                            "blockvs": [0.1, 2.0],
-                            "blockrho": [0.1, 2.0],
-                            "blockr": [0.1, 2.0],
-                            "blockQs": [None],
-                            "blockQp": [None],
-                            "blockabsdepth": [0, 1],
-                            # For these, the valid values are between 0 and some max value specified by the grid size.
-                            # Also, the 2s (max) must be larger than the 1s (min).
-                            "blockx1": [None],
-                            "blockx2": [None],
-                            "blocky1": [None],
-                            "blocky2": [None],
-                            "blockz1": [None],
-                            "blockz2": [None],
-                            # Done
-                            "topography": [False, True],
-                            "topographyzmax": [0.0, 1.0],
-                            "topographyorder": [2, 7],
-                            "topographyzetabreak": [None],
-                            "topographyinput": "gaussian",
-                            "topographyfile": [None],  # Unused
-                            "topographygaussianAmp": [0.1, 1.0],
-                            "topographygaussianXc": [0.1, 0.9],
-                            "topographygaussianYc": [0.1, 0.9],
-                            "topographygaussianLx": [0.1, 1.0],
-                            "topographygaussianLy": [0.1, 1.0],
-                            "topographyanalyticalMetric": [None],
-                            # Done
-                            "rec": [False, True],
-                            "recx": [None],
-                            "recy": [None],
-                            "reclat": [-90.0, 90.0],
-                            "reclon": [-180.0, 180.0],
-                            "recz": [None],
-                            "recdepth": [None],
-                            "rectopodepth": [None],
-                            "recfile": [None],
-                            "recsta": [None],
-                            "recnsew": [0, 1],
-                            "recwriteEvery": [100, 10000],
-                            "recusgsformat": [0, 1],
-                            "recsacformat": [0, 1],
-                            "recvariables": ["displacement", "velocity", "div", "curl", "strains", "displacementgradient"],
-                            # Done
-                            # No plans to test this.
-                            "checkpoint": [False],
-                            "checkpointtime": [None],
-                            "checkpointtimeInterval": [None],
-                            "checkpointcycle": [None],
-                            "checkpointcycleInterval": [None],
-                            "checkpointfile": [None],
-                            "checkpointbufsize": [None],
-                            # Done
-                            # No plans to test this.
-                            "restart": [False],
-                            "restartfile": [None],
-                            "restartbufsize": [None],
-                            # Done
-                            # No plans to test this.
-                            "dgalerkin": [False],
-                            "dgalerkinorder": [None],
-                            "dgalerkinsinglemode": [None],
-                            # Done
-                            # No plans to test this.
-                            "developer": [False],
-                            "developercfl": [None],
-                            "developercheckfornan": [0],
-                            "developerreporttiming": [1],
-                            "developertrace": [None],
-                            "developerthblocki": [None],
-                            "developerthblockj": [None],
-                            "developerthblockk": [None],
-                            "developercorder": [0],
-                            # Done
-                            # No plans to test this.
-                            "testpointsource": [False],
-                            "testpointsourcecp": [None],
-                            "testpointsourcecs": [None],
-                            "testpointsourcerho": [None],
-                            "testpointsourcediractest": [None],
-                            "testpointsourcehalfspace": [None],
-                            "nodes": [1, 4],
-                            "tasks": [1, 32]}
+                           "fileio": [False, True],
+                           "fileiopath": [None],
+                           "fileioverbose": [0, 5],
+                           "fileioprintcycle": [1, 100],
+                           "fileiopfs": [None],
+                           "fileionwriters": [None],
+                           # Done
+                           "grid": [True],
+                           "gridny": [0.001, 1.0],
+                           "gridnx": [0.001, 1.0],
+                           "gridnz": [0.001, 1.0],
+                           "gridx": [0.001, 1.0],
+                           "gridy": [0.001, 1.0],
+                           "gridz": [0.001, 1.0],
+                           "gridh": [0.001, 1.0],
+                           # Done
+                           "time": [True],
+                           "timet": [0.1, 1.0],
+                           "timesteps": [1, 5],
+                           # Done
+                           "supergrid": [True],
+                           "supergridgp": [5, 30],
+                           "supergriddc": [0.01, 0.02, 0.05],
+                           # Done
+                           "source": [True],
+                           "sourcem0": [0.0, 1.0],
+                           "sourcex": [0.0, 1.0],
+                           "sourcey": [0.0, 1.0],
+                           "sourcez": [0.0, 1.0],
+                           "sourcedepth": [0.0, 1.0],
+                           "sourceMxx": [-1.0, 1.0],
+                           "sourceMxy": [-1.0, 1.0],
+                           "sourceMxz": [-1.0, 1.0],
+                           "sourceMyy": [-1.0, 1.0],
+                           "sourceMyz": [-1.0, 1.0],
+                           "sourceMzz": [-1.0, 1.0],
+                           "sourceFz": [-1.0, 1.0],
+                           "sourceFx": [-1.0, 1.0],
+                           "sourceFy": [-1.0, 1.0],
+                           "sourcet0": [0.01, 0.50],
+                           "sourcefreq": [0.1, 20.0],
+                           "sourcef0": [0.0, 5.0],
+                           "sourcetype": ["Ricker", "Gaussian", "Ramp", "Triangle", "Sawtooth", "SmoothWave", "Erf", "GaussianInt", "VerySmoothBump", "RickerInt", "Brune", "BruneSmoothed", "DBrune", "GaussianWindow", "Liu", "Dirac", "C6SmoothBump"],
+                           # Done
+                           "block": [False, True],
+                           "blockrhograd": [0.1, 2.0],
+                           "blockvpgrad": [0.1, 2.0],
+                           "blockvsgrad": [0.1, 2.0],
+                           "blockvp": [0.1, 2.0],
+                           "blockvs": [0.1, 2.0],
+                           "blockrho": [0.1, 2.0],
+                           "blockr": [0.1, 2.0],
+                           "blockQs": [None],
+                           "blockQp": [None],
+                           "blockabsdepth": [0, 1],
+                           # For these, the valid values are between 0 and some max value specified by the grid size.
+                           # Also, the 2s (max) must be larger than the 1s (min).
+                           "blockx1": [None],
+                           "blockx2": [None],
+                           "blocky1": [None],
+                           "blocky2": [None],
+                           "blockz1": [None],
+                           "blockz2": [None],
+                           # Done
+                           "topography": [False, True],
+                           "topographyzmax": [0.0, 1.0],
+                           "topographyorder": [2, 7],
+                           "topographyzetabreak": [None],
+                           "topographyinput": "gaussian",
+                           "topographyfile": [None],  # Unused
+                           "topographygaussianAmp": [0.1, 1.0],
+                           "topographygaussianXc": [0.1, 0.9],
+                           "topographygaussianYc": [0.1, 0.9],
+                           "topographygaussianLx": [0.1, 1.0],
+                           "topographygaussianLy": [0.1, 1.0],
+                           "topographyanalyticalMetric": [None],
+                           # Done
+                           "rec": [False, True],
+                           "recx": [None],
+                           "recy": [None],
+                           "reclat": [-90.0, 90.0],
+                           "reclon": [-180.0, 180.0],
+                           "recz": [None],
+                           "recdepth": [None],
+                           "rectopodepth": [None],
+                           "recfile": [None],
+                           "recsta": [None],
+                           "recnsew": [0, 1],
+                           "recwriteEvery": [100, 10000],
+                           "recusgsformat": [0, 1],
+                           "recsacformat": [0, 1],
+                           "recvariables": ["displacement", "velocity", "div", "curl", "strains", "displacementgradient"],
+                           # Done
+                           # No plans to test this.
+                           "checkpoint": [False],
+                           "checkpointtime": [None],
+                           "checkpointtimeInterval": [None],
+                           "checkpointcycle": [None],
+                           "checkpointcycleInterval": [None],
+                           "checkpointfile": [None],
+                           "checkpointbufsize": [None],
+                           # Done
+                           # No plans to test this.
+                           "restart": [False],
+                           "restartfile": [None],
+                           "restartbufsize": [None],
+                           # Done
+                           # No plans to test this.
+                           "dgalerkin": [False],
+                           "dgalerkinorder": [None],
+                           "dgalerkinsinglemode": [None],
+                           # Done
+                           # No plans to test this.
+                           "developer": [False],
+                           "developercfl": [None],
+                           "developercheckfornan": [0],
+                           "developerreporttiming": [1],
+                           "developertrace": [None],
+                           "developerthblocki": [None],
+                           "developerthblockj": [None],
+                           "developerthblockk": [None],
+                           "developercorder": [0],
+                           # Done
+                           # No plans to test this.
+                           "testpointsource": [False],
+                           "testpointsourcecp": [None],
+                           "testpointsourcecs": [None],
+                           "testpointsourcerho": [None],
+                           "testpointsourcediractest": [None],
+                           "testpointsourcehalfspace": [None],
+                           "nodes": [1, 4],
+                           "tasks": [1, 32]}
 
 default_params["nekbone"] = {"ifbrick": ".false.",
-                            "iel0": 1,
-                            "ielN": 50,
-                            "istep": 1,
-                            "nx0": 10,
-                            "nxN": 10,
-                            "nstep": 1,
-                            "npx": 0,
-                            "npy": 0,
-                            "npz": 0,
-                            "mx": 0,
-                            "my": 0,
-                            "mz": 0,
-                            # nekbone is limited to 10 processors. It gets different rules.
-                            "nodes": 1,
-                            "tasks": 10}
+                             "iel0": 1,
+                             "ielN": 50,
+                             "istep": 1,
+                             "nx0": 10,
+                             "nxN": 10,
+                             "nstep": 1,
+                             "npx": 0,
+                             "npy": 0,
+                             "npz": 0,
+                             "mx": 0,
+                             "my": 0,
+                             "mz": 0,
+                             # nekbone is limited to 10 processors. It gets different rules.
+                             "nodes": 1,
+                             "tasks": 10}
 range_params["nekbone"] = {"ifbrick": [".false.", ".true."],
-                          "iel0": [1, 50],
-                          "ielN": [50],
-                          "istep": [1, 2],
-                          "nx0": [2, 10],
-                          "nxN": [10],
-                          "nstep": [1, 2],
-                          "npx": [0, 1, 10],
-                          "npy": [0, 1, 10],
-                          "npz": [0, 1, 10],
-                          "mx": [0, 1, 10],
-                          "my": [0, 1, 10],
-                          "mz": [0, 1, 10],
-                          "nodes": [1],
-                          "tasks": [10]}
-
+                           "iel0": [1, 50],
+                           "ielN": [50],
+                           "istep": [1, 2],
+                           "nx0": [2, 10],
+                           "nxN": [10],
+                           "nstep": [1, 2],
+                           "npx": [0, 1, 10],
+                           "npy": [0, 1, 10],
+                           "npz": [0, 1, 10],
+                           "mx": [0, 1, 10],
+                           "my": [0, 1, 10],
+                           "mz": [0, 1, 10],
+                           "nodes": [1],
+                           "tasks": [10]}
+ 
 # NOTE: Several of these parameters are commented out as they are unsupported in the MPI version of the program.
 default_params["miniAMR"] = {"--help": False,
-                            "--nx": 10,
-                            "--ny": 10,
-                            "--nz": 10,
-                            "--init_x": 1,
-                            "--init_y": 1,
-                            "--init_z": 1,
-                            # NOTE: Default depends on load parameter. 1 is default for RCB.
-                            "--reorder": 1,
-                            # "load": "rcb",
-                            "--npx": 1,
-                            "--npy": 1,
-                            "--npz": 1,
-                            "--max_blocks": 500,
-                            "--num_refine": 5,
-                            "--block_change": 5,  # = num_refine.
-                            "--uniform_refine": 1,
-                            "--refine_freq": 5,
-                            "--inbalance": 0,
-                            "--lb_opt": 1,
-                            "--num_vars": 40,
-                            "--comm_vars": 0,
-                            "--num_tsteps": 20,
-                            "--time": None,
-                            "--stages_per_ts": 20,
-                            "--permute": False,
-                            # "--blocking_send": False,
-                            "--code": 0,
-                            "--checksum_freq": 5,
-                            "--stencil": 7,
-                            "--error_tol": 8,
-                            "--report_diffusion": False,
-                            "--report_perf": 1,
-                            # "--refine_ghosts": False,
-                            # "--send_faces": False,
-                            # "--change_dir": False,
-                            # "--group_blocks": False,
-                            # "--break_ties": False,
-                            # "--limit_move": False,
-                            "--num_objects": 0,
-                            "type": 0,
-                            "bounce": 0,
-                            "center_x": 0.0,
-                            "center_y": 0.0,
-                            "center_z": 0.0,
-                            "movement_x": 0.0,
-                            "movement_y": 0.0,
-                            "movement_z": 0.0,
-                            "size_x": 1.0,
-                            "size_y": 1.0,
-                            "size_z": 1.0,
-                            "inc_x": 0.0,
-                            "inc_y": 0.0,
-                            "inc_z": 0.0,
-                            "nodes": 4,
-                            "tasks": 32}
+                             "--nx": 10,
+                             "--ny": 10,
+                             "--nz": 10,
+                             "--init_x": 1,
+                             "--init_y": 1,
+                             "--init_z": 1,
+                             # NOTE: Default depends on load parameter. 1 is default for RCB.
+                             "--reorder": 1,
+                             # "load": "rcb",
+                             "--npx": 1,
+                             "--npy": 1,
+                             "--npz": 1,
+                             "--max_blocks": 500,
+                             "--num_refine": 5,
+                             "--block_change": 5,  # = num_refine.
+                             "--uniform_refine": 1,
+                             "--refine_freq": 5,
+                             "--inbalance": 0,
+                             "--lb_opt": 1,
+                             "--num_vars": 40,
+                             "--comm_vars": 0,
+                             "--num_tsteps": 20,
+                             "--time": None,
+                             "--stages_per_ts": 20,
+                             "--permute": False,
+                             # "--blocking_send": False,
+                             "--code": 0,
+                             "--checksum_freq": 5,
+                             "--stencil": 7,
+                             "--error_tol": 8,
+                             "--report_diffusion": False,
+                             "--report_perf": 1,
+                             # "--refine_ghosts": False,
+                             # "--send_faces": False,
+                             # "--change_dir": False,
+                             # "--group_blocks": False,
+                             # "--break_ties": False,
+                             # "--limit_move": False,
+                             "--num_objects": 0,
+                             "type": 0,
+                             "bounce": 0,
+                             "center_x": 0.0,
+                             "center_y": 0.0,
+                             "center_z": 0.0,
+                             "movement_x": 0.0,
+                             "movement_y": 0.0,
+                             "movement_z": 0.0,
+                             "size_x": 1.0,
+                             "size_y": 1.0,
+                             "size_z": 1.0,
+                             "inc_x": 0.0,
+                             "inc_y": 0.0,
+                             "inc_z": 0.0,
+                             "nodes": 4,
+                             "tasks": 32}
 range_params["miniAMR"] = {"--help": [False],
-                          "--nx": [10, 1000],
-                          "--ny": [None],
-                          "--nz": [None],
-                          "--init_x": [1, 2, 4],
-                          "--init_y": [None],
-                          "--init_z": [None],
-                          "--reorder": [0, 1],
-                          # "load": ["rcb", "morton", "hilbert", "trunc_hilbert"],
-                          "--npx": [1, 3],
-                          "--npy": [None],
-                          "--npz": [None],
-                          "--max_blocks": [5, 500],
-                          "--num_refine": [0, 5],
-                          "--block_change": [0, 5],
-                          "--uniform_refine": [0, 1],
-                          # Ignored if uniform_refine=1
-                          "--refine_freq": [1, 5],
-                          "--inbalance": [0, 50],
-                          "--lb_opt": [0, 1, 2],
-                          "--num_vars": [1, 40],
-                          "--comm_vars": [0, 40],
-                          "--num_tsteps": [None, 20],
-                          # Ignored if num_tsteps is used.
-                          "--time": [None, 20],
-                          "--stages_per_ts": [1, 20],
-                          "--permute": [True, False],
-                          # "--blocking_send": [True, False],
-                          "--code": [0, 1, 2],
-                          "--checksum_freq": [0, 5],
-                          "--stencil": [0, 7, 27],
-                          "--error_tol": [0, 8],
-                          "--report_diffusion": [True, False],
-                          # list(range(0,15+1)), # Can be set to 0 in tests to disable output.
-                          "--report_perf": [0],
-                          # "--refine_ghost": [True, False],
-                          # "--send_faces": [True, False],
-                          # "--change_dir": [True, False],
-                          # "--group_blocks": [True, False],
-                          # "--break_ties": [True, False],
-                          # "--limit_move": [True, False],
-                          "--num_objects": [0, 1],  # list(range(0,5)),
-                          "type": list(range(0, 25+1)),
-                          "bounce": [0, 1],
-                          "center_x": [0.0, 1.0, -1.0],
-                          "center_y": [None],
-                          "center_z": [None],
-                          "movement_x": [0.0, 1.0, -1.0],
-                          "movement_y": [None],
-                          "movement_z": [None],
-                          "size_x": [0.0, 1.0, -1.0],
-                          "size_y": [None],
-                          "size_z": [None],
-                          "inc_x": [0.0, 1.0, -1.0],
-                          "inc_y": [None],
-                          "inc_z": [None],
-                          "nodes": [1, 4],
-                          "tasks": [1, 32]}
+                           "--nx": [10, 1000],
+                           "--ny": [None],
+                           "--nz": [None],
+                           "--init_x": [1, 2, 4],
+                           "--init_y": [None],
+                           "--init_z": [None],
+                           "--reorder": [0, 1],
+                           # "load": ["rcb", "morton", "hilbert", "trunc_hilbert"],
+                           "--npx": [1, 3],
+                           "--npy": [None],
+                           "--npz": [None],
+                           "--max_blocks": [5, 500],
+                           "--num_refine": [0, 5],
+                           "--block_change": [0, 5],
+                           "--uniform_refine": [0, 1],
+                           # Ignored if uniform_refine=1
+                           "--refine_freq": [1, 5],
+                           "--inbalance": [0, 50],
+                           "--lb_opt": [0, 1, 2],
+                           "--num_vars": [1, 40],
+                           "--comm_vars": [0, 40],
+                           "--num_tsteps": [None, 20],
+                           # Ignored if num_tsteps is used.
+                           "--time": [None, 20],
+                           "--stages_per_ts": [1, 20],
+                           "--permute": [True, False],
+                           # "--blocking_send": [True, False],
+                           "--code": [0, 1, 2],
+                           "--checksum_freq": [0, 5],
+                           "--stencil": [0, 7, 27],
+                           "--error_tol": [0, 8],
+                           "--report_diffusion": [True, False],
+                           # list(range(0,15+1)), # Can be set to 0 in tests to disable output.
+                           "--report_perf": [0],
+                           # "--refine_ghost": [True, False],
+                           # "--send_faces": [True, False],
+                           # "--change_dir": [True, False],
+                           # "--group_blocks": [True, False],
+                           # "--break_ties": [True, False],
+                           # "--limit_move": [True, False],
+                           "--num_objects": [0, 1],  # list(range(0,5)),
+                           "type": list(range(0, 25+1)),
+                           "bounce": [0, 1],
+                           "center_x": [0.0, 1.0, -1.0],
+                           "center_y": [None],
+                           "center_z": [None],
+                           "movement_x": [0.0, 1.0, -1.0],
+                           "movement_y": [None],
+                           "movement_z": [None],
+                           "size_x": [0.0, 1.0, -1.0],
+                           "size_y": [None],
+                           "size_z": [None],
+                           "inc_x": [0.0, 1.0, -1.0],
+                           "inc_y": [None],
+                           "inc_z": [None],
+                           "nodes": [1, 4],
+                           "tasks": [1, 32]}
 
 # Convert the parameters list to a string.
 # Used as comments on input files to make the parameters used clear.
@@ -895,6 +895,28 @@ def generate_test(app, prod, index):
         with open(testPath / "submit.slurm", "w+") as text_file:
             text_file.write(SLURMString)
 
+    # TODO: Just before running the test, publish the parameters in JSON format.
+    # json_params = copy.copy(params)
+    # # TODO: Filter out parameters that don't help?
+    # # json_params.pop("a bad param")
+    # # Convert the dict to JSON.
+    # json = json.dumps(json_params)
+    # host = "localhost"
+    # port = 412
+    # # Run the command to publish the data.
+    # ldmsd_stream_publish = "ldmsd_stream_publish -h {host} -x {xprt} -p {port} "\
+    #                        "-a munge -s {name} -t {type} -f {fin} 2>&1" \
+    #                        .format(host = host,
+    #                                xprt = "sock",
+    #                                port = port,
+    #                                name = "app_params",
+    #                                type = "json",
+    #                                f_in = json)
+    # output = subprocess.run(ldmsd_stream_publish, cwd=testPath, shell=True, check=False,
+    #                         encoding='utf-8', stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout
+    # # DEBUG
+    # print(str(output))
+
     # Queue up the job.
     queue_job(index, testPath, app, command)
 
@@ -952,8 +974,8 @@ def run_job(index=0, lazy=False):
                 # DEBUG
                 # print(str(len(queued_jobs)) + " jobs in queue.")
 
-            # Wait before trying again.
-            time.sleep(WAIT_TIME)
+                # Wait before trying again.
+                time.sleep(WAIT_TIME)
     # On local, do nothing.
 
     # Run the test case.
@@ -1191,8 +1213,8 @@ def narrow_params():
                 for i in range(REPEAT_COUNT):
                     # Get the index to save the test files.
                     index = get_next_index(app)
-                # Run the test.
-                generate_test(app, params, index)
+                    # Run the test.
+                    generate_test(app, params, index)
                 # Try to finish jobs part-way.
                 finish_active_jobs(lazy=True)
     finish_active_jobs()
@@ -1627,10 +1649,10 @@ def random_tests():
         params = get_params(app)
         # Run each test multiple times.
         for i in range(REPEAT_COUNT):
-        # Get the index to save the test files.
-        index = get_next_index(app)
-        # Run the test.
-        generate_test(app, params, index)
+            # Get the index to save the test files.
+            index = get_next_index(app)
+            # Run the test.
+            generate_test(app, params, index)
         # Try to finish jobs.
         finish_active_jobs(lazy=True)
         # If we want to terminate, we can't be lazy. Be sure all jobs complete.
@@ -1725,36 +1747,42 @@ def run_regressors(X, y, preprocessor, app=""):
         futures = []
 
         # Run our regressors.
-        forestRegressor = RandomForestRegressor()
+        # forestRegressor = RandomForestRegressor()
+        # futures.append(executor.submit(
+        #     regression, get_pipeline(preprocessor, forestRegressor), "Random Forest Regressor "+app, X, y))
+        
         futures.append(executor.submit(
-            regression, get_pipeline(preprocessor, forestRegressor), "Random Forest Regressor "+app, X, y))
+            regression, get_pipeline(preprocessor, CompleteRegressor()), "Complete Regressor "+app, X, y))
 
-        futures.append(executor.submit(regression, get_pipeline(preprocessor, tree.DecisionTreeRegressor()), "Decision Tree Regressor "+app, X, y))
+        # futures.append(executor.submit(regression, get_pipeline(preprocessor, tree.DecisionTreeRegressor()), "Decision Tree Regressor "+app, X, y))
 
-        futures.append(executor.submit(
-            regression, get_pipeline(preprocessor, linear_model.BayesianRidge()), "Bayesian Ridge "+app, X, y))
+        # futures.append(executor.submit(
+        #     regression, get_pipeline(preprocessor, linear_model.BayesianRidge()), "Bayesian Ridge "+app, X, y))
 
-        futures.append(executor.submit(regression, get_pipeline(preprocessor, svm.SVR()), "Support Vector Regression RBF "+app, X, y))
-        for i in range(1, 3+1):
-            futures.append(executor.submit(regression, get_pipeline(preprocessor, svm.SVR(kernel="poly", degree=i)), "Support Vector Regression poly "+str(i)+" "+app, X, y))
-        futures.append(executor.submit(regression, get_pipeline(preprocessor, svm.SVR(kernel="sigmoid")), "Support Vector Regression sigmoid "+app, X, y))
+        # futures.append(executor.submit(regression, get_pipeline(preprocessor, svm.SVR()), "Support Vector Regression RBF "+app, X, y))
+        # for i in range(1, 3+1):
+        #     futures.append(executor.submit(regression, get_pipeline(preprocessor, svm.SVR(kernel="poly", degree=i)), "Support Vector Regression poly "+str(i)+" "+app, X, y))
+        # futures.append(executor.submit(regression, get_pipeline(preprocessor, svm.SVR(kernel="sigmoid")), "Support Vector Regression sigmoid "+app, X, y))
 
-        futures.append(executor.submit(regression, get_pipeline(preprocessor, make_pipeline(StandardScaler(), SGDRegressor(max_iter=1000, tol=1e-3))), "Linear Stochastic Gradient Descent Regressor "+app, X, y))
+        # futures.append(executor.submit(regression, get_pipeline(preprocessor, make_pipeline(StandardScaler(), SGDRegressor(max_iter=1000, tol=1e-3))), "Linear Stochastic Gradient Descent Regressor "+app, X, y))
 
-        # for i in range(1, 7+1):
-        #     futures.append(executor.submit(regression, get_pipeline(preprocessor, KNeighborsRegressor(n_neighbors=i)), str(i)+" Nearest Neighbors Regressor "+app, X, y))
+        # # for i in range(1, 7+1):
+        # #     futures.append(executor.submit(regression, get_pipeline(preprocessor, KNeighborsRegressor(n_neighbors=i)), str(i)+" Nearest Neighbors Regressor "+app, X, y))
 
-        if app != "nekbonebaseline":
-            for i in range(1, 4+1):
-                futures.append(executor.submit(regression, get_pipeline(preprocessor, PLSRegression(n_components=i)), str(i)+" PLS Regression "+app, X, y))
+        # if app != "nekbonebaseline":
+        #     for i in range(1, 4+1):
+        #         futures.append(executor.submit(regression, get_pipeline(preprocessor, PLSRegression(n_components=i)), str(i)+" PLS Regression "+app, X, y))
 
-        # for i in range(1, 10+1):
-        #     layers = tuple(100 for _ in range(i))
-        #     futures.append(executor.submit(regression, get_pipeline(preprocessor, MLPRegressor(activation="relu", hidden_layer_sizes=layers, random_state=1, max_iter=500)), str(i)+" MLP Regressor relu "+app, X, y))
+        # # for i in range(1, 10+1):
+        # #     layers = tuple(100 for _ in range(i))
+        # #     futures.append(executor.submit(regression, get_pipeline(preprocessor, MLPRegressor(activation="relu", hidden_layer_sizes=layers, random_state=1, max_iter=500)), str(i)+" MLP Regressor relu "+app, X, y))
 
-        i = 4
-        layers = tuple(100 for _ in range(i))
-        futures.append(executor.submit(regression, get_pipeline(preprocessor, MLPRegressor(activation="relu", hidden_layer_sizes=layers, random_state=1, max_iter=500)), str(i)+" MLP Regressor relu "+app, X, y))
+        # i = 4
+        # layers = tuple(100 for _ in range(i))
+        # futures.append(executor.submit(regression, get_pipeline(preprocessor, MLPRegressor(activation="relu", hidden_layer_sizes=layers, random_state=1, max_iter=500)), str(i)+" MLP Regressor relu "+app, X, y))
+
+        # i = 4
+        # futures.append(executor.submit(regression, get_pipeline(preprocessor, KNeighborsRegressor(n_neighbors=i)), str(i)+" Nearest Neighbors Regressor "+app, X, y))
 
         # TODO: Adapt this into an equation-based solver, where we are just finding the coefficients.
         # if app == "SWFFT":
@@ -1782,132 +1810,132 @@ def ml():
                 print("\n" + app)
                 futures.append(executor.submit(str, "\n" + app +
                                 ("baseline" if baseline else "") + "\n"))
-            X = df[app]
+                X = df[app]
 
-            # Use the error field to report simply whether or not we encountered an
-            # error. We can use this as a training feature.
-            if "error" in X.columns:
+                # Use the error field to report simply whether or not we encountered an
+                # error. We can use this as a training feature.
+                if "error" in X.columns:
+                    if REMOVE_ERRORS:
+                        # Filter out errors.
+                        X = X[X["error"].isnull()]
+                        X = X.drop(columns="error")
+                        if X.shape[0] < 1:
+                            print("All tests contained errors. Skipping...")
+                            continue
+                    else:
+                        X["error"] = X["error"].notnull()
+
+                # Simple replacements for base cases.
+                X = X.replace('on', '1', regex=True)
+                X = X.replace('off', '0', regex=True)
+                X = X.replace('true', '1', regex=True)
+                X = X.replace('false', '0', regex=True)
+                X = X.replace('.true.', '1', regex=True)
+                X = X.replace('.false.', '0', regex=True)
+
+                # Choose what to predict.
+                PREDICTION = "timeTaken"
+
+                assert not (REMOVE_ERRORS and PREDICTION == "error")
+
+                # Prediction selection.
+                if PREDICTION == "error":
+                    # For predicting errors.
+                    y = X["error"].astype(float)
+                elif PREDICTION == "timeTaken":
+                    # For predicting time taken
+                    y = X["timeTaken"].astype(float)
+                    # Prevent empty values for y.
+                    # This should never happen if tests complete gracefully.
+                    # Default to the max time of 24 hours.
+                    y = y.fillna(86400.0)
+
+                # When predicting, time taken cannot be known ahead of time.
+                X = X.drop(columns="timeTaken")
                 if REMOVE_ERRORS:
-                    # Filter out errors.
-                    X = X[X["error"].isnull()]
+                    # The column was already removed by now in this case.
+                    pass
+                else:
+                    # When predicting, we cannot know if the program crashed before it starts.
                     X = X.drop(columns="error")
-                    if X.shape[0] < 1:
-                        print("All tests contained errors. Skipping...")
-                        continue
-                else:
-                    X["error"] = X["error"].notnull()
+                # The testNum is also irrelevant for training purposes.
+                X = X.drop(columns="testNum")
 
-            # Simple replacements for base cases.
-            X = X.replace('on', '1', regex=True)
-            X = X.replace('off', '0', regex=True)
-            X = X.replace('true', '1', regex=True)
-            X = X.replace('false', '0', regex=True)
-            X = X.replace('.true.', '1', regex=True)
-            X = X.replace('.false.', '0', regex=True)
+                if "ExaMiniMD" in app:
+                    X = X.drop(columns="units")
+                    X = X.drop(columns="lattice")
+                    X = X.drop(columns="lattice_constant")
+                    X = X.drop(columns="lattice_offset_x")
+                    X = X.drop(columns="lattice_offset_y")
+                    X = X.drop(columns="lattice_offset_z")
+                    X = X.drop(columns="lattice_ny")
+                    X = X.drop(columns="lattice_nz")
+                    X = X.drop(columns="ntypes")
+                    X = X.drop(columns="type")
+                    X = X.drop(columns="mass")
+                    X = X.drop(columns="force_cutoff")
+                    X = X.drop(columns="temperature_target")
+                    X = X.drop(columns="temperature_seed")
+                    X = X.drop(columns="neighbor_skin")
+                    X = X.drop(columns="comm_exchange_rate")
+                    X = X.drop(columns="thermo_rate")
+                    X = X.drop(columns="comm_newton")
+                
+                # Skip anything that isn't a job input parameter.
+                if baseline:
+                    for col in X:
+                        if col not in ["nodes","tasks"]:
+                            X = X.drop(columns=col)
 
-            # Choose what to predict.
-            PREDICTION = "timeTaken"
+                # X = scaler.transform(X)
+                # # Feature selection. Removes useless columns to simplify the model.
+                sel = feature_selection.VarianceThreshold(threshold=0)
+                # X = sel.fit_transform(X)
+                # # Discretization. Buckets results to whole minutes like related works.
+                # # y = y.apply(lambda x: int(x/60))
 
-            assert not (REMOVE_ERRORS and PREDICTION == "error")
-
-            # Prediction selection.
-            if PREDICTION == "error":
-                # For predicting errors.
-                y = X["error"].astype(float)
-            elif PREDICTION == "timeTaken":
-                # For predicting time taken
-                y = X["timeTaken"].astype(float)
-                # Prevent empty values for y.
-                # This should never happen if tests complete gracefully.
-                # Default to the max time of 24 hours.
-                y = y.fillna(86400.0)
-
-            # When predicting, time taken cannot be known ahead of time.
-            X = X.drop(columns="timeTaken")
-            if REMOVE_ERRORS:
-                # The column was already removed by now in this case.
-                pass
-            else:
-                # When predicting, we cannot know if the program crashed before it starts.
-                X = X.drop(columns="error")
-            # The testNum is also irrelevant for training purposes.
-            X = X.drop(columns="testNum")
-
-            if "ExaMiniMD" in app:
-                X = X.drop(columns="units")
-                X = X.drop(columns="lattice")
-                X = X.drop(columns="lattice_constant")
-                X = X.drop(columns="lattice_offset_x")
-                X = X.drop(columns="lattice_offset_y")
-                X = X.drop(columns="lattice_offset_z")
-                X = X.drop(columns="lattice_ny")
-                X = X.drop(columns="lattice_nz")
-                X = X.drop(columns="ntypes")
-                X = X.drop(columns="type")
-                X = X.drop(columns="mass")
-                X = X.drop(columns="force_cutoff")
-                X = X.drop(columns="temperature_target")
-                X = X.drop(columns="temperature_seed")
-                X = X.drop(columns="neighbor_skin")
-                X = X.drop(columns="comm_exchange_rate")
-                X = X.drop(columns="thermo_rate")
-                X = X.drop(columns="comm_newton")
-            
-            # Skip anything that isn't a job input parameter.
-            if baseline:
+                # Track the features types of each cell.
+                numeric_features = []
+                categorical_features = []
+                # Iterate over every cell.
                 for col in X:
-                    if col not in ["nodes","tasks"]:
-                        X = X.drop(columns=col)
+                    # Identify what type each column is.
+                    isNumeric = True
+                    for rowIndex, row in X[col].iteritems():
+                        try:
+                            # If it can be a float, make it a float.
+                            X[col][rowIndex] = float(X[col][rowIndex])
+                            # If the float is NaN (unacceptable to Sci-kit), make it -1.0 for now.
+                            if pd.isnull(X[col][rowIndex]):
+                                X[col][rowIndex] = -1.0
+                        except ValueError:
+                            # Otherwise, we will assume this is categorical data.
+                            isNumeric = False
+                            # DEBUG
+                            # print("Found data: " + X[col][rowIndex])
+                    if isNumeric:
+                        # For whatever reason, float conversions don't want to work in Pandas dataframes.
+                        # Try changing the value column-wide instead.
+                        # TODO: Doesn't seem to actually solve anything.
+                        X[col] = X[col].astype(float)
+                        numeric_features.append(str(col))
+                    else:
+                        categorical_features.append(str(col))
 
-            # X = scaler.transform(X)
-            # # Feature selection. Removes useless columns to simplify the model.
-            sel = feature_selection.VarianceThreshold(threshold=0)
-            # X = sel.fit_transform(X)
-            # # Discretization. Buckets results to whole minutes like related works.
-            # # y = y.apply(lambda x: int(x/60))
+                # Standardization for numeric data.
+                numeric_transformer = Pipeline(
+                    steps=[("imputer", SimpleImputer(strategy="median")),
+                        ("scaler", StandardScaler())])
+                # One-hot encoding for categorical data.
+                categorical_transformer = OneHotEncoder(handle_unknown="ignore")
+                # Add the transformers to a preprocessor object.
+                preprocessor = ColumnTransformer(transformers=[
+                    ("num", numeric_transformer, numeric_features),
+                    ("cat", categorical_transformer, categorical_features),])
 
-            # Track the features types of each cell.
-            numeric_features = []
-            categorical_features = []
-            # Iterate over every cell.
-            for col in X:
-                # Identify what type each column is.
-                isNumeric = True
-                for rowIndex, row in X[col].iteritems():
-                    try:
-                        # If it can be a float, make it a float.
-                        X[col][rowIndex] = float(X[col][rowIndex])
-                        # If the float is NaN (unacceptable to Sci-kit), make it -1.0 for now.
-                        if pd.isnull(X[col][rowIndex]):
-                            X[col][rowIndex] = -1.0
-                    except ValueError:
-                        # Otherwise, we will assume this is categorical data.
-                        isNumeric = False
-                        # DEBUG
-                        # print("Found data: " + X[col][rowIndex])
-                if isNumeric:
-                    # For whatever reason, float conversions don't want to work in Pandas dataframes.
-                    # Try changing the value column-wide instead.
-                    # TODO: Doesn't seem to actually solve anything.
-                    X[col] = X[col].astype(float)
-                    numeric_features.append(str(col))
-                else:
-                    categorical_features.append(str(col))
-
-            # Standardization for numeric data.
-            numeric_transformer = Pipeline(
-                steps=[("imputer", SimpleImputer(strategy="median")),
-                       ("scaler", StandardScaler())])
-            # One-hot encoding for categorical data.
-            categorical_transformer = OneHotEncoder(handle_unknown="ignore")
-            # Add the transformers to a preprocessor object.
-            preprocessor = ColumnTransformer(transformers=[
-                ("num", numeric_transformer, numeric_features),
-                ("cat", categorical_transformer, categorical_features),])
-
-            # Run regressors.
-            futures.append(executor.submit(run_regressors, X, y, preprocessor,
-                            app + ("baseline" if baseline else "")))
+                # Run regressors.
+                futures.append(executor.submit(run_regressors, X, y, preprocessor,
+                                app + ("baseline" if baseline else "")))
 
         print('Writing output. Waiting for tests to complete.')
         with open('MLoutput.txt', 'w') as f:
