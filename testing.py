@@ -22,16 +22,23 @@ import functools
 from itertools import product
 from pathlib import Path
 
+from predictors.analytical.analytical_regressor import AnalyticalRegressor
+from predictors.Tsafrir.tsafrir_regressor import TsafrirRegressor
+from predictors.reqtime.reqtime_regressor import ReqtimeRegressor
+from predictors.complete.complete_regressor import CompleteRegressor
+
+# These cannot be used on Voltrino.
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+
 from sklearn import preprocessing
 from sklearn import feature_selection
 from sklearn import linear_model
 from sklearn import svm
 from sklearn import metrics
 from sklearn import tree
-# from sklearn.compose import ColumnTransformer
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.ensemble import RandomForestRegressor
-# from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LinearRegression
 from sklearn.linear_model import SGDRegressor
 from sklearn.model_selection import cross_val_score
@@ -80,9 +87,9 @@ DEBUG_APPS = False
 # Whether or not to run ML tests in baseline mode.
 BASELINE = False
 # Used to choose which apps to test.
-# range_params.keys() #["ExaMiniMDbase", "ExaMiniMDsnap", "SWFFT", "sw4lite", "nekbone", "miniAMR"]
+# range_params.keys() #["ExaMiniMDbase", "ExaMiniMDsnap", "SWFFT", "sw4lite", "nekbone", "miniAMR", "HACC-IO"]
 # NOTE: These are the apps I have in my draft.
-enabled_apps = ["ExaMiniMDsnap", "SWFFT", "nekbone"]
+enabled_apps = ["LAMMPS", "ExaMiniMDsnap", "SWFFT", "nekbone", "HACC-IO"]
 # Whether or not to shortcut out tests that may be redundant or invalid.
 SKIP_TESTS = True
 # A terminate indicator. Set to True to quit gracefully.
@@ -223,6 +230,40 @@ range_params["ExaMiniMDsnap"] = {"force_type": ["snap"],
                                  "nodes": [1, 4],
                                  "tasks": [1, 32]}
 
+default_params["LAMMPS"] = {"units": "lj",
+                            "lattice": "fcc",
+                            "lattice_constant": 0.8842, # rhostar
+                            "lattice_nx": 5,
+                            "lattice_ny": 5,
+                            "lattice_nz": 5,
+                            "ntypes": 1,
+                            "type": 1,
+                            "mass": 1.0,
+                            "temperature_target": 1.0, # tinitial
+                            "temperature_seed": 12345,
+                            "force_type": "lj/cut",
+                            "force_cutoff": 2.5, # cutoff
+                            "neighbor_skin": 0.3,
+                            "comm_exchange_rate": 20,
+                            "dt": 0.005,
+                            "thermo_rate": 10,
+                            "nsteps": 100,
+                            "nodes": 4,
+                            "tasks": 32}
+range_params["LAMMPS"] = {"lattice_nx": [1, 5, 26],
+                          "lattice_ny": [1, 5, 26],
+                          "lattice_nz": [1, 5, 26],
+                          "lattice_constant": [0.5, 0.8842, 1.0],
+                          "dt": [0.0001, 0.0005, 0.001],
+                          "force_cutoff": [2.0, 2.5, 3.0],
+                          "neighbor_skin": [0.1, 0.3, 0.5],
+                          "tinitial": [1.0], # Kept to maintain formatting in CSV.
+                          "temperature_target": [1.0],
+                          "thermo_rate": [1, 10, 100],
+                          "nsteps": [0, 10, 100, 1000],
+                          "nodes": [1, 4],
+                          "tasks": [1, 32]}
+
 default_params["SWFFT"] = {"n_repetitions": 1,
                            "ngx": 512,
                            "ngy": None,
@@ -350,14 +391,14 @@ default_params["sw4lite"] = {"grid": True,
                              "dgalerkinsinglemode": None,
                              "nodes": 4,
                              "tasks": 32}
-range_params["sw4lite"] = {# Done
+range_params["sw4lite"] = {
                            "fileio": [False, True],
                            "fileiopath": [None],
                            "fileioverbose": [0, 5],
                            "fileioprintcycle": [1, 100],
                            "fileiopfs": [None],
                            "fileionwriters": [None],
-                           # Done
+
                            "grid": [True],
                            "gridny": [0.001, 1.0],
                            "gridnx": [0.001, 1.0],
@@ -366,15 +407,15 @@ range_params["sw4lite"] = {# Done
                            "gridy": [0.001, 1.0],
                            "gridz": [0.001, 1.0],
                            "gridh": [0.001, 1.0],
-                           # Done
+
                            "time": [True],
                            "timet": [0.1, 1.0],
                            "timesteps": [1, 5],
-                           # Done
+
                            "supergrid": [True],
                            "supergridgp": [5, 30],
                            "supergriddc": [0.01, 0.02, 0.05],
-                           # Done
+
                            "source": [True],
                            "sourcem0": [0.0, 1.0],
                            "sourcex": [0.0, 1.0],
@@ -394,7 +435,7 @@ range_params["sw4lite"] = {# Done
                            "sourcefreq": [0.1, 20.0],
                            "sourcef0": [0.0, 5.0],
                            "sourcetype": ["Ricker", "Gaussian", "Ramp", "Triangle", "Sawtooth", "SmoothWave", "Erf", "GaussianInt", "VerySmoothBump", "RickerInt", "Brune", "BruneSmoothed", "DBrune", "GaussianWindow", "Liu", "Dirac", "C6SmoothBump"],
-                           # Done
+
                            "block": [False, True],
                            "blockrhograd": [0.1, 2.0],
                            "blockvpgrad": [0.1, 2.0],
@@ -414,7 +455,7 @@ range_params["sw4lite"] = {# Done
                            "blocky2": [None],
                            "blockz1": [None],
                            "blockz2": [None],
-                           # Done
+
                            "topography": [False, True],
                            "topographyzmax": [0.0, 1.0],
                            "topographyorder": [2, 7],
@@ -427,7 +468,7 @@ range_params["sw4lite"] = {# Done
                            "topographygaussianLx": [0.1, 1.0],
                            "topographygaussianLy": [0.1, 1.0],
                            "topographyanalyticalMetric": [None],
-                           # Done
+
                            "rec": [False, True],
                            "recx": [None],
                            "recy": [None],
@@ -443,7 +484,7 @@ range_params["sw4lite"] = {# Done
                            "recusgsformat": [0, 1],
                            "recsacformat": [0, 1],
                            "recvariables": ["displacement", "velocity", "div", "curl", "strains", "displacementgradient"],
-                           # Done
+
                            # No plans to test this.
                            "checkpoint": [False],
                            "checkpointtime": [None],
@@ -452,17 +493,16 @@ range_params["sw4lite"] = {# Done
                            "checkpointcycleInterval": [None],
                            "checkpointfile": [None],
                            "checkpointbufsize": [None],
-                           # Done
+
                            # No plans to test this.
                            "restart": [False],
                            "restartfile": [None],
                            "restartbufsize": [None],
-                           # Done
+
                            # No plans to test this.
                            "dgalerkin": [False],
                            "dgalerkinorder": [None],
-                           "dgalerkinsinglemode": [None],
-                           # Done
+
                            # No plans to test this.
                            "developer": [False],
                            "developercfl": [None],
@@ -473,7 +513,7 @@ range_params["sw4lite"] = {# Done
                            "developerthblockj": [None],
                            "developerthblockk": [None],
                            "developercorder": [0],
-                           # Done
+
                            # No plans to test this.
                            "testpointsource": [False],
                            "testpointsourcecp": [None],
@@ -632,6 +672,14 @@ range_params["miniAMR"] = {"--help": [False],
                            "nodes": [1, 4],
                            "tasks": [1, 32]}
 
+default_params["HACC-IO"] = {"numParticles": 20000,
+                           "nodes": 1,
+                           "tasks": 1}
+range_params["HACC-IO"] = {"numParticles": [2000, 2000000],
+                           "nodes": [1],
+                           "tasks": [1]}
+
+
 # Convert the parameters list to a string.
 # Used as comments on input files to make the parameters used clear.
 # TODO: Remove/ignore this for deep learning.
@@ -712,6 +760,24 @@ def make_file(app, params):
         contents += "timestep {dt}\n".format_map(params)
         contents += "newton {comm_newton}\n".format_map(params)
         contents += "run {nsteps}\n".format_map(params)
+    elif app.startswith("LAMMPS"):
+        contents += "# " + params_to_string(params) + "\n\n"
+        contents += "units {units}\n".format_map(params)
+        contents += "atom_style atomic\n"
+        contents += "lattice {lattice} {lattice_constant}\n".format_map(params)
+        contents += "region box block 0 {lattice_nx} 0 {lattice_ny} 0 {lattice_nz}\n".format_map(params)
+        contents += "create_box {ntypes} box\n".format_map(params)
+        contents += "create_atoms 1 box\n"
+        contents += "mass {type} {mass}\n".format_map(params)
+        contents += "velocity all create {tinitial} {temperature_seed}\n".format_map(params)
+        contents += "pair_style {force_type} {force_cutoff}\n".format_map(params)
+        contents += "pair_coeff 1 1 1.0 1.0\n"
+        contents += "neighbor {neighbor_skin} bin\n".format_map(params)
+        contents += "neigh_modify delay 0 every {comm_exchange_rate} check no\n".format_map(params)
+        contents += "fix 1 all nve\n"
+        contents += "timestep {dt}\n".format_map(params)
+        contents += "thermo {thermo_rate}\n".format_map(params)
+        contents += "run {nsteps}\n".format_map(params)
     elif app == "sw4lite":
         contents += "# " + params_to_string(params) + "\n\n"
         sections = ["fileio", "grid", "time", "supergrid", "source", "block", "topography",
@@ -752,15 +818,21 @@ def get_command(app, params):
         exe = "../../../"
     if app.startswith("ExaMiniMD"):
         exe += "ExaMiniMD" + "/" + "ExaMiniMD"
+    elif app.startswith("LAMMPS"):
+        exe += "LAMMPS" + "/" + "lmp_voltrino"
+    elif app == "HACC-IO":
+        exe += "HACC-IO" + "/" + "hacc_io"
     else:
         exe += str(app) + "/" + str(app)
-    # nekbone doesn't have a debug build.
-    if DEBUG_APPS and app != "nekbone":
+    # nekbone, LAMMPS and HACC-IO don't have debug builds.
+    if DEBUG_APPS and app != "nekbone" and app != "LAMMPS" and app != "HACC-IO":
         exe += ".g"
 
     args = ""
     if app.startswith("ExaMiniMD"):
         args = "-il input.lj"
+    elif app.startswith("LAMMPS"):
+        args = "-i in.ar.lj"
     elif app == "SWFFT":
         # Locally adjust the params list to properly handle None.
         for param in params:
@@ -792,6 +864,8 @@ def get_command(app, params):
             # Fill in each of these arguments.
             args += "--object {type} {bounce} {center_x} {center_y} {center_z} {movement_x} {movement_y} {movement_z} {size_x} {size_y} {size_z} {inc_x} {inc_y} {inc_z} ".format_map(
                 params)
+    elif app == "HACC-IO":
+        args = "{numParticles} /lscratch/ovis/IOTestUCF/darshan".format_map(params)
 
     # Assemble the whole command.
     command = exe + " " + args
@@ -866,6 +940,8 @@ def generate_test(app, prod, index):
         # Save the contents to an appropriately named file.
         if app.startswith("ExaMiniMD"):
             fileName = "input.lj"
+        elif app.startswith("LAMMPS"):
+            fileName = "in.ar.lj"
         elif app == "sw4lite":
             fileName = "input.in"
         elif app == "nekbone":
@@ -921,7 +997,7 @@ def generate_test(app, prod, index):
     queue_job(index, testPath, app, command)
 
 
-# TODO: Add a job to our Python queue.
+# Add a job to our Python queue.
 def queue_job(index, testPath, app, command):
     global queued_jobs
 
@@ -1123,7 +1199,7 @@ def adjust_params():
             if resume_index > index:
                 continue
             # Test skips and input hacks.
-            if app.startswith("ExaMiniMD"):
+            if app.startswith("ExaMiniMD") or app.startswith("LAMMPS"):
                 # A bit of a hack, but we don't really need to test all combinations of these.
                 # Let lattice_nx dictate the values for lattice_ny and lattice_nz.
                 prod["lattice_ny"] = prod["lattice_nx"]
@@ -1614,7 +1690,9 @@ def get_params(app):
     # TODO: Handle conditional cases for each app here.
     # elif app == "ExaMiniMDbase":
     #     pass
-    # elif app = "ExaMiniMDsnap":
+    # elif app == "ExaMiniMDsnap":
+    #     pass
+    # elif app == "LAMMPS":
     #     pass
     # elif app == "nekbone":
     #     pass
@@ -1660,35 +1738,52 @@ def random_tests():
     signal.signal(signal.SIGINT, original_sigint)
 
 # Train and test a regressor on a dataset.
-def regression(regressor, modelName, X, y):
+def regression(regressor, modelName, X, y, oneAtATime=False):
     ret = str(modelName) + "\n"
 
     # DEBUG
     #assert np.any(np.isinf(X)) and np.any(np.isnan(X)), "Invalid data in X"
     #assert np.any(np.isinf(y)) and np.any(np.isnan(y)), "Invalid data in y"
 
-    # Train Regressor.
-    # Time the training.
-    startTime = time.process_time()
-    regressor = regressor.fit(X, y)
-    endTime = time.process_time()
-    # Run and report cross-validation accuracy.
-    scores = cross_val_score(regressor, X, y, cv=5,
-                             scoring="r2")
-    ret += " R^2: " + str(scores.mean()) + "\n"
-    ret += str(endTime - startTime) + "s \n"
-    # scores = cross_val_score(regressor, X, y, cv=5,
-    #                          scoring="neg_root_mean_squared_error")
-    # ret += " RMSE: " + str(scores.mean()) + "\n"
-
-    # Retrain on 4/5 of the data for plotting.
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42)
-    regressor = regressor.fit(X_train, y_train)
     # Plot the results for each regressor.
-    y_pred = regressor.predict(X_test)
     plt.figure()
-    plt.scatter(y_pred, y_test, s=20, c="black", label="data")
+    y_pred = []
+    # Some predictors only work properly when given one job at a time.
+    if oneAtATime:
+        assert len(X) == len(y)
+        for i in range(len(X)):
+            xVal = X.iloc[i]
+            yVal = y.iloc[i]
+            prediction = regressor.predict_and_fit(xVal, yVal)
+            y_pred.append(prediction)
+        # R^2 calculation since cross_val_score isn't meaningful here.
+        numerator = ((y - y_pred) ** 2).sum(axis=0)
+        denominator = ((y - np.average(y, axis=0)) ** 2).sum(axis=0)
+        score = 1 - numerator / denominator
+        ret += " R^2: " + str(score) + "\n"
+        plt.scatter(y_pred, y, s=20, c="black", label="data")
+    else:
+        # Train Regressor.
+        # Time the training.
+        startTime = time.process_time()
+        regressor = regressor.fit(X, y)
+        endTime = time.process_time()
+        # Run and report cross-validation accuracy.
+        scores = cross_val_score(regressor, X, y, cv=5,
+                                scoring="r2")
+        ret += " R^2: " + str(scores.mean()) + "\n"
+        ret += str(endTime - startTime) + "s \n"
+        # scores = cross_val_score(regressor, X, y, cv=5,
+        #                          scoring="neg_root_mean_squared_error")
+        # ret += " RMSE: " + str(scores.mean()) + "\n"
+
+        # Retrain on 4/5 of the data for plotting.
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42)
+        regressor = regressor.fit(X_train, y_train)
+        y_pred = regressor.predict(X_test)
+        plt.scatter(y_pred, y_test, s=20, c="black", label="data")
+
     plt.xlabel("Predicted (seconds) ("+str(modelName)+")")
     plt.ylabel("Actual (seconds)")
     # if "ExaMiniMD" in modelName:
@@ -1697,29 +1792,30 @@ def regression(regressor, modelName, X, y):
     # plt.legend()
     plt.savefig("figures/"+str(modelName).replace(" ", "")+".svg")
 
-    # Plot the learning curves.
-    train_sizes, train_scores, test_scores = learning_curve(
-        regressor,
-        X,
-        y,
-        train_sizes=np.linspace(0.1, 1.0, 100),
-        scoring="neg_mean_squared_error",
-        cv=5,
-        n_jobs=-1,
-        # May be useful for training and testing run time measurements.
-        # return_times=True,
-    )
-    plt.figure()
-    plt.plot(train_sizes, -test_scores.mean(1), label=str(modelName))
-    plt.xlabel("Train size")
-    plt.ylabel("Mean Squared Error")
-    #plt.title("Learning curve - " + str(modelName))
-    plt.legend(loc="best")
-    plt.savefig("figures/"+str(modelName).replace(" ", "")+"_learning.svg")
+    if not oneAtATime:
+        # Plot the learning curves.
+        train_sizes, train_scores, test_scores = learning_curve(
+            regressor,
+            X,
+            y,
+            train_sizes=np.linspace(0.1, 1.0, 100),
+            scoring="neg_mean_squared_error",
+            cv=5,
+            n_jobs=-1,
+            # May be useful for training and testing run time measurements.
+            # return_times=True,
+        )
+        plt.figure()
+        plt.plot(train_sizes, -test_scores.mean(1), label=str(modelName))
+        plt.xlabel("Train size")
+        plt.ylabel("Mean Squared Error")
+        #plt.title("Learning curve - " + str(modelName))
+        plt.legend(loc="best")
+        plt.savefig("figures/"+str(modelName).replace(" ", "")+"_learning.svg")
 
-    # DEBUG
-    # print(X.columns)
-    # print(regressor.steps[1][1].feature_importances_)
+    if "Decision Tree" in modelName:
+        print((X.columns) + "\n" + str(regressor.steps[1][1].feature_importances_))
+        # print(regressor.steps[1][1].feature_importances_)
 
     # tree.plot_tree(regressor.steps[1][1])
     # plt.show()
@@ -1742,51 +1838,78 @@ def run_regressors(X, y, preprocessor, app=""):
     # Make sure our features have the expected shape.
     # Also useful to keep track of test sizes.
     ret = str(X.shape) + "\n"
+    # Columns must be maintained for some predictors.
+    columns = list(X.columns)
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=48) as executor:
         futures = []
 
         # Run our regressors.
-        # forestRegressor = RandomForestRegressor()
-        # futures.append(executor.submit(
-        #     regression, get_pipeline(preprocessor, forestRegressor), "Random Forest Regressor "+app, X, y))
-        
+        forestRegressor = RandomForestRegressor()
         futures.append(executor.submit(
-            regression, get_pipeline(preprocessor, CompleteRegressor()), "Complete Regressor "+app, X, y))
+            regression, get_pipeline(preprocessor, forestRegressor), 
+            "Random Forest Regressor "+app, X, y))
 
-        # futures.append(executor.submit(regression, get_pipeline(preprocessor, tree.DecisionTreeRegressor()), "Decision Tree Regressor "+app, X, y))
+        futures.append(executor.submit(
+            regression, get_pipeline(preprocessor, tree.DecisionTreeRegressor()), 
+            "Decision Tree Regressor "+app, X, y))
 
-        # futures.append(executor.submit(
-        #     regression, get_pipeline(preprocessor, linear_model.BayesianRidge()), "Bayesian Ridge "+app, X, y))
+        futures.append(executor.submit(
+            regression, get_pipeline(preprocessor, linear_model.BayesianRidge()), 
+            "Bayesian Ridge "+app, X, y))
 
-        # futures.append(executor.submit(regression, get_pipeline(preprocessor, svm.SVR()), "Support Vector Regression RBF "+app, X, y))
-        # for i in range(1, 3+1):
-        #     futures.append(executor.submit(regression, get_pipeline(preprocessor, svm.SVR(kernel="poly", degree=i)), "Support Vector Regression poly "+str(i)+" "+app, X, y))
-        # futures.append(executor.submit(regression, get_pipeline(preprocessor, svm.SVR(kernel="sigmoid")), "Support Vector Regression sigmoid "+app, X, y))
+        futures.append(executor.submit(
+            regression, get_pipeline(preprocessor, svm.SVR()), 
+            "Support Vector Regression RBF "+app, X, y))
+        for i in range(1, 3+1):
+            futures.append(executor.submit(
+                regression, get_pipeline(preprocessor, svm.SVR(kernel="poly", degree=i)), 
+                "Support Vector Regression poly "+str(i)+" "+app, X, y))
+        futures.append(executor.submit(
+            regression, get_pipeline(preprocessor, svm.SVR(kernel="sigmoid")), 
+            "Support Vector Regression sigmoid "+app, X, y))
 
-        # futures.append(executor.submit(regression, get_pipeline(preprocessor, make_pipeline(StandardScaler(), SGDRegressor(max_iter=1000, tol=1e-3))), "Linear Stochastic Gradient Descent Regressor "+app, X, y))
+        futures.append(executor.submit(
+            regression, get_pipeline(preprocessor, make_pipeline(StandardScaler(), SGDRegressor(max_iter=1000, tol=1e-3))), 
+            "Linear Stochastic Gradient Descent Regressor "+app, X, y))
 
-        # # for i in range(1, 7+1):
-        # #     futures.append(executor.submit(regression, get_pipeline(preprocessor, KNeighborsRegressor(n_neighbors=i)), str(i)+" Nearest Neighbors Regressor "+app, X, y))
+        for i in range(1, 7+1):
+            futures.append(executor.submit(
+                regression, get_pipeline(preprocessor, KNeighborsRegressor(n_neighbors=i)), 
+                str(i)+" Nearest Neighbors Regressor "+app, X, y))
 
-        # if app != "nekbonebaseline":
-        #     for i in range(1, 4+1):
-        #         futures.append(executor.submit(regression, get_pipeline(preprocessor, PLSRegression(n_components=i)), str(i)+" PLS Regression "+app, X, y))
+        if app != "nekbonebaseline":
+            for i in range(1, 4+1):
+                futures.append(executor.submit(
+                    regression, get_pipeline(preprocessor, PLSRegression(n_components=i)), 
+                    str(i)+" PLS Regression "+app, X, y))
 
-        # # for i in range(1, 10+1):
-        # #     layers = tuple(100 for _ in range(i))
-        # #     futures.append(executor.submit(regression, get_pipeline(preprocessor, MLPRegressor(activation="relu", hidden_layer_sizes=layers, random_state=1, max_iter=500)), str(i)+" MLP Regressor relu "+app, X, y))
+        for i in range(1, 10+1):
+            layers = tuple(100 for _ in range(i))
+            futures.append(executor.submit(
+                regression, get_pipeline(preprocessor, MLPRegressor(activation="relu", hidden_layer_sizes=layers, random_state=1, max_iter=500)), 
+                str(i)+" MLP Regressor relu "+app, X, y))
 
-        # i = 4
-        # layers = tuple(100 for _ in range(i))
-        # futures.append(executor.submit(regression, get_pipeline(preprocessor, MLPRegressor(activation="relu", hidden_layer_sizes=layers, random_state=1, max_iter=500)), str(i)+" MLP Regressor relu "+app, X, y))
+        # NOTE: Adapt this into an equation-based solver, where we are just finding the coefficients?
+        if app == "SWFFT":
+            futures.append(executor.submit(
+                regression, get_pipeline(preprocessor, LinearRegression()), 
+                "Analytical Regressor "+app, multiply_and_merge(X), y))
 
-        # i = 4
-        # futures.append(executor.submit(regression, get_pipeline(preprocessor, KNeighborsRegressor(n_neighbors=i)), str(i)+" Nearest Neighbors Regressor "+app, X, y))
+        futures.append(executor.submit(
+                    regression, get_pipeline(preprocessor, CompleteRegressor()), 
+                    "Complete Regressor "+app, X, y))
 
-        # TODO: Adapt this into an equation-based solver, where we are just finding the coefficients.
-        # if app == "SWFFT":
-        #     futures.append(executor.submit(regression, get_pipeline(preprocessor, LinearRegression()), "Linear Regressor "+app, multiply_and_merge(X), y))
+        # NOTE: Preprocessing is bad for these. Use raw values.
+        if app == "SWFFT":
+            futures.append(executor.submit(
+                regression, AnalyticalRegressor(columns), "Analytical Regressor "+app, X, y))
+        futures.append(executor.submit(
+                regression, TsafrirRegressor(columns), "Tsafrir Regressor "+app, X, y, True))
+        futures.append(executor.submit(
+                regression, ReqtimeRegressor(columns), "Reqtime Regressor "+app, X, y, True))
+        futures.append(executor.submit(
+                regression, CompleteRegressor(columns), "Complete Regressor "+app, X, y, True))
 
         for future in futures:
             ret += future.result()
@@ -1880,6 +2003,11 @@ def ml():
                     X = X.drop(columns="comm_exchange_rate")
                     X = X.drop(columns="thermo_rate")
                     X = X.drop(columns="comm_newton")
+
+                # Fill in inferred data, based on an understanding of how SWFFT works.
+                if "SWFFT" in app:
+                    X["ngy"] = np.where(X["ngy"].isna(), X["ngx"], X["ngy"])
+                    X["ngz"] = np.where(X["ngz"].isna(), X["ngy"], X["ngz"])
                 
                 # Skip anything that isn't a job input parameter.
                 if baseline:
@@ -1958,7 +2086,7 @@ def base_test():
 def main():
     # base_test()
     # return
-    fromCSV = False
+    fromCSV = True
 
     # Optionally start training from CSV immediately.
     if fromCSV:
@@ -1971,7 +2099,7 @@ def main():
         random_tests()
         pass
     # Perform machine learning.
-    #ml()
+    ml()
 
 
 def exit_gracefully(signum, frame):

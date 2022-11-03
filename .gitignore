@@ -1,7 +1,9 @@
 .vscode/
-tests/
+tests*/
 testsOld/
 archive/
 figures/
 oldFigures/
 tests_current/
+
+*.pyc
