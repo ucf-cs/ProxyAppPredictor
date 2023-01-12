@@ -26,6 +26,7 @@ class AnalyticalRegressor(BaseEstimator, RegressorMixin):
                                  "nodes", "tasks"]:
             # Fallback for non-SWFFT code.
             print("Warning: Non-SWFFT code passed to analytical regressor.")
+            print(X.shape[1], self.columns)
             predictions = []
             for i in X.shape[0]:
                 predictions.append(86400)

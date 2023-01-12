@@ -1,0 +1,1 @@
+python -m cProfile csv_to_swf.py ./

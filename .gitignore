@@ -5,5 +5,7 @@ archive/
 figures/
 oldFigures/
 tests_current/
+learning/
+output/
 
 *.pyc
