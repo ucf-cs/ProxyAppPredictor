@@ -13,6 +13,7 @@ from re import X
 import numpy as np
 import os
 import pandas as pd
+import pickle
 import platform
 import random
 import signal
@@ -50,7 +51,7 @@ from sklearn.neighbors import KNeighborsRegressor
 from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import make_pipeline
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.preprocessing import StandardScaler, OneHotEncoder, MinMaxScaler
 # from complete.complete_regressor import CompleteRegressor
 import matplotlib.pyplot as plt
 
@@ -75,6 +76,11 @@ features = {}
 
 # Used to identify what type of machine is being used.
 SYSTEM = platform.node()
+# The location where all test output is saved.
+# TEST_DIR = "/pscratch/kmlamar/ProxyAppPredictorTests" + SYSTEM + "/" #"./tests/"
+TEST_DIR = "./tests/"
+# Where ML results are pickled and stored.
+PICKLE_DIR = "/pscratch/kmlamar/pickles/"
 # Time to wait on SLURM, in seconds, to avoid a busy loop.
 WAIT_TIME = 1
 # The maximum number of active jobs to enqueue.
@@ -90,15 +96,18 @@ MAX_QUEUE = 30
 REPEAT_COUNT = 5
 # Runs apps with their debug symbols enabled.
 # Set to false for performance testing.
+# NOTE: No debug apps available on eclipse at this time.
 DEBUG_APPS = False
 # Used to choose which apps to test.
-# range_params.keys() #["ExaMiniMDbase", "ExaMiniMDsnap", "SWFFT", "sw4lite", "nekbone", "miniAMR", "HACC-IO"]
+# range_params.keys() #["ExaMiniMDbase", "ExaMiniMDsnap", "SWFFT", "sw4lite", "nekbone", "miniAMR", "HACC-IO", "LAMMPS"]
 # NOTE: These are the apps I have in my draft.
-enabled_apps = ["LAMMPS", "ExaMiniMDsnap", "SWFFT", "nekbone", "HACC-IO"]
+enabled_apps = ["ExaMiniMDsnap",  "HACC-IO", "LAMMPS", "SWFFT", "nekbone"]
 # Whether or not to shortcut out tests that may be redundant or invalid.
 SKIP_TESTS = True
 # A global terminate indicator. Set to True to quit gracefully.
 terminate = False
+
+should_depickle = False
 
 # LAMMPS SNAP file contents for ExaMiniMD SNAP testing.
 SNAP_FILE = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia.gov CITATION: Thompson, Swiler, Trott, Foiles and Tucker, arxiv.org, 1409.3880 (2014)\n'
@@ -170,7 +179,6 @@ SNAPPARAM_FILE = ('# DATE: 2014-09-05 CONTRIBUTOR: Aidan Thompson athomps@sandia
                   'bzeroflag 0\n'
                   'quadraticflag 0\n')
 
-# TODO: Bump up these values for large-scale testing.
 # A set of sane defaults based on 3d Lennard-Jones melt (in.lj).
 default_params["ExaMiniMDbase"] = {"units": "lj",
                                    "lattice": "fcc",
@@ -202,7 +210,7 @@ range_params["ExaMiniMDbase"] = {"force_type": ["lj/cut"],
                                  "lattice_nz": [1, 5, 26],
                                  "dt": [0.0001, 0.0005, 0.001, 0.005, 1.0, 2.0],
                                  "nsteps": [0, 10, 100, 1000],
-                                 "nodes": [1, 4],
+                                 "nodes": [1, 64],
                                  "tasks": [1, 32]}
 default_params["ExaMiniMDsnap"] = {"units": "metal",
                                    "lattice": "sc",
@@ -233,8 +241,8 @@ range_params["ExaMiniMDsnap"] = {"force_type": ["snap"],
                                  "lattice_ny": [1, 5, 26],
                                  "lattice_nz": [1, 5, 26],
                                  "dt": [0.0001, 0.0005, 0.001],
-                                 "nsteps": [0, 10, 100, 1000],
-                                 "nodes": [1, 4],
+                                 "nsteps": [0, 10, 100, 1000, 10000],
+                                 "nodes": [1, 64],
                                  "tasks": [1, 32]}
 
 default_params["LAMMPS"] = {"units": "lj",
@@ -264,12 +272,10 @@ range_params["LAMMPS"] = {"lattice_nx": [1, 5, 26],
                           "dt": [0.0001, 0.0005, 0.001],
                           "force_cutoff": [2.0, 2.5, 3.0],
                           "neighbor_skin": [0.1, 0.3, 0.5],
-                          # Kept to maintain formatting in CSV.
-                          "tinitial": [1.0],
                           "temperature_target": [1.0],
                           "thermo_rate": [1, 10, 100],
-                          "nsteps": [0, 10, 100, 1000],
-                          "nodes": [1, 4],
+                          "nsteps": [0, 10, 100, 1000, 10000],
+                          "nodes": [1, 64],
                           "tasks": [1, 32]}
 
 default_params["SWFFT"] = {"n_repetitions": 1,
@@ -278,11 +284,11 @@ default_params["SWFFT"] = {"n_repetitions": 1,
                            "ngz": None,
                            "nodes": 4,
                            "tasks": 32}
-range_params["SWFFT"] = {"n_repetitions": [1, 2, 4, 8, 16, 64],
+range_params["SWFFT"] = {"n_repetitions": [1, 2, 4, 8, 16, 64, 512],
                          "ngx": [256, 512, 1024],
                          "ngy": [None, 256, 512, 1024],
                          "ngz": [None, 256, 512, 1024],
-                         "nodes": [1, 4],
+                         "nodes": [1, 64],
                          "tasks": [1, 31]}
 
 default_params["sw4lite"] = {"grid": True,
@@ -529,7 +535,7 @@ range_params["sw4lite"] = {
     "testpointsourcerho": [None],
     "testpointsourcediractest": [None],
     "testpointsourcehalfspace": [None],
-    "nodes": [1, 4],
+    "nodes": [1, 64],
     "tasks": [1, 32]}
 
 default_params["nekbone"] = {"ifbrick": ".false.",
@@ -549,20 +555,20 @@ default_params["nekbone"] = {"ifbrick": ".false.",
                              "nodes": 1,
                              "tasks": 10}
 range_params["nekbone"] = {"ifbrick": [".false.", ".true."],
-                           "iel0": [1, 50],
-                           "ielN": [50],
-                           "istep": [1, 2],
-                           "nx0": [2, 10],
-                           "nxN": [10],
-                           "nstep": [1, 2],
+                           "iel0": [1, 1000],
+                           "ielN": [1, 1000],
+                           "istep": [1, 2, 4],
+                           "nx0": [4, 12],
+                           "nxN": [4, 12],
+                           "nstep": [1, 2, 4],
                            "npx": [0, 1, 10],
                            "npy": [0, 1, 10],
                            "npz": [0, 1, 10],
                            "mx": [0, 1, 10],
                            "my": [0, 1, 10],
                            "mz": [0, 1, 10],
-                           "nodes": [1],
-                           "tasks": [10]}
+                           "nodes": [1, 64],
+                           "tasks": [1, 32]}
 
 # NOTE: Several of these parameters are commented out as they are unsupported in the MPI version of the program.
 default_params["miniAMR"] = {"--help": False,
@@ -677,14 +683,14 @@ range_params["miniAMR"] = {"--help": [False],
                            "inc_x": [0.0, 1.0, -1.0],
                            "inc_y": [None],
                            "inc_z": [None],
-                           "nodes": [1, 4],
+                           "nodes": [1, 64],
                            "tasks": [1, 32]}
 
 default_params["HACC-IO"] = {"numParticles": 20000,
                              "nodes": 1,
                              "tasks": 1}
 range_params["HACC-IO"] = {"numParticles": [2000, 2000000],
-                           "nodes": [1],
+                           "nodes": [1, 64],
                            "tasks": [1]}
 
 
@@ -705,7 +711,7 @@ def get_next_index(app):
     Enables testing to resume while giving each test a unique index.
     """
     try:
-        idx = int(max(os.listdir("./tests/" + app + "/"))) + 1
+        idx = int(max(os.listdir(TEST_DIR + app + "/"))) + 1
     except FileNotFoundError:
         idx = 0
     return idx
@@ -718,7 +724,7 @@ def make_slurm_script(f):
     if "voltrino" in SYSTEM:
         contents = ('#!/bin/bash\n'
                     '#SBATCH -N {nodes}\n'
-                    '#SBATCH --time=24:00:00\n'
+                    '#SBATCH --time=48:00:00\n'
                     '#SBATCH -J {app}\n'
                     '#SBATCH --exclusive --gres=craynetwork:0\n'
                     'export OMP_NUM_THREADS=1\n'
@@ -735,12 +741,15 @@ def make_slurm_script(f):
                     'DIFF=$(echo "$END_TS - $START_TS" | bc)\n'
                     'echo "timeTaken = $DIFF"\n'
                     'echo "----------------------------------------"').format_map(f)
-    elif "eclipse" in SYSTEM:
+    elif "eclipse" in SYSTEM or "ghost" in SYSTEM:
         contents = ('#!/bin/bash\n'
                     '#SBATCH -N {nodes}\n'
                     '#SBATCH --time=24:00:00\n'
+                    #'#SBATCH --time=4:00:00\n'
                     '#SBATCH -J {app}\n'
-                    '#SBATCH -p batch\n'
+                    #'#SBATCH -p batch\n'
+                    #'#SBATCH -p short\n'
+                    '#SBATCH --partition=batch,short\n'
                     '#SBATCH --account=fy140198\n'
                     '#SBATCH --exclusive\n'
                     'module load intel/20.0.2.254\n'
@@ -756,19 +765,19 @@ def make_slurm_script(f):
                     'export BOOST_ROOT=/projects/HPCMON/tools/boost_1_71_0_build\n'
                     'export HDF5_ROOT=/projects/HPCMON/tools/hdf5-1.10.2_build/hdf5\n'
                     'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/projects/papi/install/cts1/papi-5.7.0/intel-18.0/lib\n'
+                    'export OMP_PLACES=threads\n'  # NOTE: Only for ExaMiniMD?
+                    'export OMP_PROC_BIND=true\n'  # NOTE: Only for ExaMiniMD?
                     '# run LDMS\n'
                     '/projects/ovis/UCF/ldms/ldms_init.sh $(pwd)\n'
                     'echo $SLURM_JOB_NODELIST\n'
                     'echo "----------------------------------------"\n'
                     'START_TS=$(date +"%s")\n'
-                    'echo "START_TS=$START_TS"\n'
                     'echo "----------------------------------------"\n'
                     'srun --exclusive --mpi=pmi2 --ntasks-per-node={tasks} {command}\n'
                     'echo "----------------------------------------"\n'
                     'END_TS=$(date +"%s")\n'
-                    'echo "END_TS=$END_TS"\n'
                     'DIFF=$(echo "$END_TS - $START_TS" | bc)\n'
-                    'echo "The DiffOfTime = $DIFF"\n'
+                    'echo "timeTaken = $DIFF"\n'
                     'echo "----------------------------------------"').format_map(f)
     else:
         raise Exception("Invalid SYSTEM name provided: " + SYSTEM)
@@ -821,7 +830,7 @@ def make_file(app, params):
         contents += "create_box {ntypes} box\n".format_map(params)
         contents += "create_atoms 1 box\n"
         contents += "mass {type} {mass}\n".format_map(params)
-        contents += "velocity all create {tinitial} {temperature_seed}\n".format_map(
+        contents += "velocity all create {temperature_target} {temperature_seed}\n".format_map(
             params)
         contents += "pair_style {force_type} {force_cutoff}\n".format_map(
             params)
@@ -869,16 +878,25 @@ def get_command(app, params):
     """ Build up the appropriate command for this application run.
     """
     # Get the executable.
-    if SYSTEM == "voltrino-int":
+    if "voltrino" in SYSTEM:
         exe = "/projects/ovis/UCF/voltrino_run/"
+    elif "eclipse" in SYSTEM or "ghost" in SYSTEM:
+            exe = "/projects/ovis/UCF/eclipse_run/"
     else:
         exe = "../../../"
+
     if app.startswith("ExaMiniMD"):
         exe += "ExaMiniMD" + "/" + "ExaMiniMD"
-    elif app.startswith("LAMMPS"):
-        exe += "LAMMPS" + "/" + "lmp_voltrino"
     elif app == "HACC-IO":
         exe += "HACC-IO" + "/" + "hacc_io"
+    elif app.startswith("LAMMPS"):
+        exe += "LAMMPS" + "/"
+        if "voltrino" in SYSTEM:
+            exe += "lmp_voltrino"
+        elif "eclipse" in SYSTEM or "ghost" in SYSTEM:
+            exe += "LAMMPS"
+    elif "nekbone" in app:
+        exe = "/projects/ovis/UCF/eclipse_apps/nekbone-3.1/test/example1/nekbone"
     else:
         exe += str(app) + "/" + str(app)
     # nekbone, LAMMPS and HACC-IO don't have debug builds.
@@ -924,8 +942,9 @@ def get_command(app, params):
                 {movement_x} {movement_y} {movement_z} {size_x} {size_y} \
                 {size_z} {inc_x} {inc_y} {inc_z} ".format_map(params)
     elif app == "HACC-IO":
-        args = "{numParticles} /lscratch/ovis/IOTestUCF/darshan".format_map(
+        args = "{numParticles} ".format_map(
             params)
+        args += "/projects/ovis/UCF/data/" + SYSTEM + str(params["testNum"])
 
     # Assemble the whole command.
     command = exe + " " + args
@@ -937,15 +956,17 @@ def scrape_output(output, app, index):
     """
     lines = output.split('\n')
     for line in lines:
-        if line.startswith("timeTaken = "):
-            features[app][index]["timeTaken"] = \
-                int(line[len("timeTaken = "):])
         if "error" in line or "fatal" in line or "libhugetlbfs" in line:
             if "Plugin file not found" in line:
+                continue
+            if "Stale file handle" in line:
                 continue
             if "error" not in features[app][index].keys():
                 features[app][index]["error"] = ""
             features[app][index]["error"] += line + "\n"
+        if line.startswith("timeTaken = "):
+            features[app][index]["timeTaken"] = \
+                int(line[len("timeTaken = "):])
     return features
 
 
@@ -953,7 +974,7 @@ def append_test(app, test):
     """ Append the test results to a CSV file for later analysis.
     """
     # The location of the output CSV.
-    output_file = "./tests/" + app + "dataset.csv"
+    output_file = TEST_DIR + app + "dataset.csv"
     # We only add the header if we are creating the file fresh.
     needs_header = not os.path.exists(output_file)
     # Make sure the error key is there. Otherwise, it'll be missing sometimes.
@@ -991,7 +1012,7 @@ def generate_test(app, prod, index):
     features[app][index] = params
 
     # Create a folder to hold a SLURM script and any input files needed.
-    test_path = Path("./tests/" + app + "/" + str(index).zfill(10))
+    test_path = Path(TEST_DIR + app + "/" + str(index).zfill(10))
     test_path.mkdir(parents=True, exist_ok=True)
 
     # NOTE: Add support for compiling per-test binaries from here, if needed.
@@ -1027,7 +1048,7 @@ def generate_test(app, prod, index):
     # Everything else was set earlier.
     script_params["command"] = command
 
-    if SYSTEM == "voltrino-int":
+    if "voltrino" in SYSTEM or "eclipse" in SYSTEM or "ghost" in SYSTEM:
         # Generate the SLURM script contents.
         slurm_string = make_slurm_script(script_params)
         # Save the contents to an appropriately named file.
@@ -1088,8 +1109,8 @@ def run_job(index=0, lazy=False):
         index, job = random.choice(list(queued_jobs.items()))
 
     # Wait until the test is ready to run.
-    # On Voltrino, wait until the queue empties a bit.
-    if SYSTEM == "voltrino-int":
+    # On HPC, wait until the queue empties a bit.
+    if "voltrino" in SYSTEM or "eclipse" in SYSTEM or "ghost" in SYSTEM:
         while True:
             # Get the number of jobs currently in my queue.
             n_jobs = int(subprocess.run("squeue -u kmlamar | grep -c kmlamar",
@@ -1118,8 +1139,8 @@ def run_job(index=0, lazy=False):
     # On local, do nothing.
 
     # Run the test case.
-    # On Voltrino, submit the SLURM script.
-    if SYSTEM == "voltrino-int":
+    # On HPC, submit the SLURM script.
+    if "voltrino" in SYSTEM or "eclipse" in SYSTEM or "ghost" in SYSTEM:
         print("Queuing app: " + job["app"] + "\t test: " + str(index))
         output = subprocess.run("sbatch submit.slurm",
                                 cwd=job["test_path"],
@@ -1199,8 +1220,7 @@ def finish_active_jobs(lazy=False):
                     # The file likely doesn't exist yet.
                     # Try again later.
                     continue
-                finally:
-                    f.close()
+                f.close()
                 # Parse the output.
                 features = scrape_output(
                     output, active_jobs[job]["app"], active_jobs[job]["index"])
@@ -1326,8 +1346,7 @@ def adjust_params():
             generate_test(app, prod, index)
             # Try to finish jobs part-way.
             finish_active_jobs(lazy=True)
-
-    finish_active_jobs()
+    finish_active_jobs(lazy=False)
 
 
 def narrow_params():
@@ -1357,7 +1376,7 @@ def narrow_params():
                     generate_test(app, params, index)
                 # Try to finish jobs part-way.
                 finish_active_jobs(lazy=True)
-    finish_active_jobs()
+    finish_active_jobs(lazy=False)
 
 
 def read_df():
@@ -1366,7 +1385,7 @@ def read_df():
     # For each app.
     for app in enabled_apps:
         # Open the existing CSV.
-        df[app] = pd.read_csv("./tests/" + app + "dataset.csv",
+        df[app] = pd.read_csv(TEST_DIR + app + "dataset.csv",
                               sep=",", header=0, index_col=0,
                               engine="c", quotechar="\"")
     return
@@ -1413,14 +1432,21 @@ def get_params(app):
 
     def next_pow_2(x):
         return 1 if x == 0 else 2**(x - 1).bit_length()
+    
+    def get_pow_2(upper,lower=1):
+        """ Get a uniform random power of 2 between 1 and limit.
+        """
+        max_bits = upper.bit_length() - 1
+        min_bits = lower.bit_length() - 1
+        power = random.randint(min_bits, max_bits)
+        return 2 ** power
+    
+    def factors(n):
+            return set(functools.reduce(list.__add__, ([i, n//i] for i in range(1, int(n**0.5) + 1) if n % i == 0)))
 
     # All jobs must set these.
-    params["nodes"] = rand_param(app, "nodes")
-    if not is_pow_2(params["nodes"]):
-        params["nodes"] = next_pow_2(params["nodes"])
-    params["tasks"] = rand_param(app, "tasks")
-    if not is_pow_2(params["tasks"]):
-        params["tasks"] = next_pow_2(params["tasks"])
+    params["nodes"] = get_pow_2(max(x for x in range_params[app]["nodes"] if x is not None))
+    params["tasks"] = get_pow_2(max(x for x in range_params[app]["tasks"] if x is not None))
 
     if app == "sw4lite":
         if random.choice(range_params[app]["fileio"]):
@@ -1666,21 +1692,18 @@ def get_params(app):
     elif app == "SWFFT":
         params["n_repetitions"] = rand_param(app, "n_repetitions")
 
-        params["ngx"] = rand_param(app, "ngx")
-        if not is_pow_2(params["ngx"]):
-            params["ngx"] = next_pow_2(params["ngx"])
+        params["ngx"] = get_pow_2(max(x for x in range_params[app]["ngx"] if x is not None),
+                                  min(x for x in range_params[app]["ngx"] if x is not None))
 
         if random.choice(range(2)):
-            params["ngy"] = rand_param(app, "ngy")
-            if not is_pow_2(params["ngy"]):
-                params["ngy"] = next_pow_2(params["ngy"])
+            params["ngy"] = get_pow_2(max(x for x in range_params[app]["ngy"] if x is not None),
+                                      min(x for x in range_params[app]["ngy"] if x is not None))
         else:
             params["ngy"] = None
 
         if params["ngy"] is not None and random.choice(range(2)):
-            params["ngz"] = rand_param(app, "ngz")
-            if not is_pow_2(params["ngz"]):
-                params["ngz"] = next_pow_2(params["ngz"])
+            params["ngz"] = get_pow_2(max(x for x in range_params[app]["ngz"] if x is not None),
+                                      min(x for x in range_params[app]["ngz"] if x is not None))
         else:
             params["ngz"] = None
 
@@ -1703,8 +1726,6 @@ def get_params(app):
 
         params["--reorder"] = rand_param(app, "--reorder")
 
-        def factors(n):
-            return set(functools.reduce(list.__add__, ([i, n//i] for i in range(1, int(n**0.5) + 1) if n % i == 0)))
         processes_count = params["tasks"]
         proc_count = []
         proc_count.append(int(random.choice(list(factors(processes_count)))))
@@ -1777,14 +1798,70 @@ def get_params(app):
     #     pass
     # elif app == "LAMMPS":
     #     pass
-    # elif app == "nekbone":
-    #     pass
+    elif app == "nekbone":
+        LELT = 1000
+        params["ielN"] = rand_param(app, "ielN")
+        assert(params["ielN"] <= LELT)
+        params["iel0"] = rand_param(app, "iel0", [
+            min(x for x in range_params[app]["iel0"] if x is not None),
+            params["ielN"]])
+        assert(params["iel0"] <= params["ielN"])
+        params["istep"] = rand_param(app, "istep")
+        LX1 = 12
+        params["nxN"] = rand_param(app, "nxN")
+        assert(params["nxN"] <= LX1)
+        params["nx0"] = rand_param(app, "nx0", [
+            min(x for x in range_params[app]["nx0"] if x is not None),
+            params["nxN"]])
+        assert(params["nx0"] <= params["nxN"])
+        params["nstep"] = rand_param(app, "nstep")
+
+        if random.choice(range(2)):
+            # Automatically find the decomposition.
+            params["npx"] = 0
+            params["npy"] = 0
+            params["npz"] = 0
+            params["mx"] = 0
+            params["my"] = 0
+            params["mz"] = 0
+        else:
+            LP = 1000
+            assert(params["nodes"] <= LP)
+            processes_count = params["nodes"] # TODO: Verify this is the correct number.
+            proc_count = []
+            proc_count.append(int(random.choice(list(factors(processes_count)))))
+            proc_count.append(
+                int(random.choice(list(factors(processes_count/proc_count[0])))))
+            proc_count.append(int(processes_count/proc_count[0]/proc_count[1]))
+            random.shuffle(proc_count)
+            params["npx"] = proc_count.pop()
+            params["npy"] = proc_count.pop()
+            params["npz"] = proc_count.pop()
+
+            LELT = 1000
+            assert(params["tasks"] <= LELT)
+            processes_count = params["tasks"] # TODO: Verify this is the correct number.
+            proc_count = []
+            proc_count.append(int(random.choice(list(factors(processes_count)))))
+            proc_count.append(
+                int(random.choice(list(factors(processes_count/proc_count[0])))))
+            proc_count.append(int(processes_count/proc_count[0]/proc_count[1]))
+            random.shuffle(proc_count)
+            params["mx"] = proc_count.pop()
+            params["my"] = proc_count.pop()
+            params["mz"] = proc_count.pop()
+
+        # Set remaining parameters.
+        for param, values in range_params[app].items():
+            if param not in params:
+                params[param] = rand_param(app, param)
 
     # The default case just picks parameters at random within a range.
     else:
         # For each parameter:
         for param, values in range_params[app].items():
-            params[param] = rand_param(app, param)
+            if param not in params:
+                params[param] = rand_param(app, param)
 
     # Explicitly fill in unused parameters with None.
     # This is important to ensure default values aren't used,
@@ -1822,6 +1899,16 @@ def random_tests():
     signal.signal(signal.SIGINT, original_sigint)
 
 
+def pickle_data(data, name):
+    if not os.path.exists(PICKLE_DIR):
+        os.makedirs(PICKLE_DIR)
+    pickle.dump(data, open(PICKLE_DIR + str(name), 'wb'))
+
+
+def depickle_data(name):
+    return pickle.load(open(PICKLE_DIR + str(name), 'rb'))
+
+
 def regression(regressor, model_name, X, y, one_at_a_time=False):
     """ Train and test a regressor on a dataset.
     """
@@ -1835,12 +1922,22 @@ def regression(regressor, model_name, X, y, one_at_a_time=False):
     y_pred = []
     # Some predictors only work properly when given one job at a time.
     if one_at_a_time:
-        assert len(X) == len(y)
-        for i in range(len(X)):
-            xVal = X.iloc[i]
-            yVal = y.iloc[i]
-            prediction = regressor.predict_and_fit(xVal, yVal)
-            y_pred.append(prediction)
+        # Check for possible depickling.
+        if should_depickle:
+            y = depickle_data(model_name + "_y")
+            y_pred = depickle_data(model_name + "_y_pred")
+        else:
+            assert len(X) == len(y)
+            for i in range(len(X)):
+                xVal = X.iloc[i]
+                yVal = y.iloc[i]
+                prediction = regressor.predict_and_fit(xVal, yVal)
+                y_pred.append(prediction)
+
+            # Pickle the data.
+            pickle_data(y, model_name + "_y")
+            pickle_data(y_pred, model_name + "_y_pred")
+
         # R^2 calculation since cross_val_score isn't meaningful here.
         numerator = ((y - y_pred) ** 2).sum(axis=0)
         denominator = ((y - np.average(y, axis=0)) ** 2).sum(axis=0)
@@ -1848,26 +1945,57 @@ def regression(regressor, model_name, X, y, one_at_a_time=False):
         ret += " R^2: " + str(score) + "\n"
         plt.scatter(y_pred, y, s=20, c="black", label="data")
     else:
-        # Train Regressor.
-        # Time the training.
-        startTime = time.process_time()
-        regressor = regressor.fit(X, y)
-        endTime = time.process_time()
-        # Run and report cross-validation accuracy.
-        scores = cross_val_score(regressor, X, y, cv=5,
-                                 scoring="r2")
-        ret += " R^2: " + str(scores.mean()) + "\n"
-        ret += str(endTime - startTime) + "s \n"
+        # Check for possible depickling.
+        if should_depickle:
+            y = depickle_data(model_name + "_y")
+            y_pred = depickle_data(model_name + "_y_pred")
+            scores = depickle_data(model_name + "_scores")
+            regressor = depickle_data(model_name + "_regressor")
+            plot_regressor = depickle_data(model_name + "_plot__regressor")
+            X = depickle_data(model_name + "_X")
+            y = depickle_data(model_name + "_y")
+            X_test = depickle_data(model_name + "_X_test")
+            y_test = depickle_data(model_name + "_y_test")
+            total_time = depickle_data(model_name + "_total_time")
+        else:
+            # Train Regressor.
+            # Time the training.
+            startTime = time.process_time()
+            regressor = regressor.fit(X, y)
+            endTime = time.process_time()
+            total_time = endTime - startTime
+            # Retrain on 4/5 of the data for plotting.
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=0.2, random_state=42)
+            plot_regressor = regressor.fit(X_train, y_train)
 
-        # Retrain on 4/5 of the data for plotting.
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42)
-        regressor = regressor.fit(X_train, y_train)
-        y_pred = regressor.predict(X_test)
+            scores = cross_val_score(regressor, X, y, cv=5,
+                                 scoring="r2")
+
+            y_pred = plot_regressor.predict(X_test)
+
+            # Pickle the data.
+            pickle_data(y, model_name + "_y")
+            pickle_data(y_pred, model_name + "_y_pred")
+            pickle_data(scores, model_name + "_scores")
+            pickle_data(regressor, model_name + "_regressor")
+            pickle_data(plot_regressor, model_name + "_plot__regressor")
+            pickle_data(X, model_name + "_X")
+            pickle_data(y, model_name + "_y")
+            pickle_data(X_test, model_name + "_X_test")
+            pickle_data(y_test, model_name + "_y_test")
+            pickle_data(total_time, model_name + "_total_time")
+
+        # Report cross-validation accuracy.
+        ret += " R^2: " + str(scores.mean()) + "\n"
+        ret += str(total_time) + "s \n"
+
         plt.scatter(y_pred, y_test, s=20, c="black", label="data")
 
-    plt.xlabel("Predicted (seconds) ("+str(model_name)+")")
-    plt.ylabel("Actual (seconds)")
+    # plt.xlabel("Predicted (seconds) ("+str(model_name)+")")
+    # plt.ylabel("Actual (seconds)")
+    plt.xlabel("Predicted (minutes) ("+str(model_name)+")")
+    plt.ylabel("Actual (minutes)")
     # if "ExaMiniMD" in model_name:
     #     plt.xscale('log',base=10)
     #     plt.yscale('log',base=10)
@@ -1881,19 +2009,30 @@ def regression(regressor, model_name, X, y, one_at_a_time=False):
     plt.close()
 
     if not one_at_a_time:
-        # Plot the learning curves.
-        train_sizes, train_scores, test_scores = learning_curve(
-            regressor,
-            X,
-            y,
-            train_sizes=np.linspace(0.1, 1.0, 100),
-            scoring="neg_mean_squared_error",
-            cv=5,
-            n_jobs=-1,
-            # May be useful for training and testing run time measurements.
-            # return_times=True,
-        )
+        if should_depickle:
+            train_sizes = depickle_data(model_name + "_train_sizes")
+            train_scores = depickle_data(model_name + "_train_scores")
+            test_scores = depickle_data(model_name + "_test_scores")
+        else:
+            # Plot the learning curves.
+            train_sizes, train_scores, test_scores = learning_curve(
+                regressor,
+                X,
+                y,
+                train_sizes=np.linspace(0.1, 1.0, 100),
+                scoring="neg_root_mean_squared_error",
+                cv=5,
+                n_jobs=-1,
+                # May be useful for training and testing run time measurements.
+                # return_times=True,
+            )
+            pickle_data(train_sizes, model_name + "_train_sizes")
+            pickle_data(train_scores, model_name + "_train_scores")
+            pickle_data(test_scores, model_name + "_test_scores")
+        
         plt.plot(train_sizes, -test_scores.mean(1), label=str(model_name))
+        # Set the lower limit of the y-axis to 0
+        plt.ylim(0, None)
         # Output learning curve data.
         if not os.path.exists("learning"):
             os.makedirs("learning")
@@ -1902,7 +2041,7 @@ def regression(regressor, model_name, X, y, one_at_a_time=False):
                 learning_file.write(
                     str(model_name)+","+str(train)+","+str(-test_scores.mean(1)[i])+"\n")
         plt.xlabel("Train size")
-        plt.ylabel("Mean Squared Error")
+        plt.ylabel("Root Mean Squared Error")
         # plt.title("Learning curve - " + str(model_name))
         plt.legend(loc="best")
         plt.savefig("figures/"+str(model_name).replace(" ", "") +
@@ -1976,8 +2115,9 @@ def run_regressor(X, y, preprocessor, model_idx, app="", only_count=False):
                 (regression, get_pipeline(preprocessor, PLSRegression(n_components=i)),
                  str(i)+" PLS Regression "+app, X, y))
 
-    for i in range(1, 10+1):
-        layers = tuple(100 for _ in range(i))
+    for i in range(1, 2 + 1):
+        layer_size = int((len(columns) + 1) / 2) # (Input size + output size) / 2
+        layers = tuple(layer_size for _ in range(i))
         regressors.append(
             (regression, get_pipeline(preprocessor, MLPRegressor(activation="relu", hidden_layer_sizes=layers, random_state=1, max_iter=500)),
              str(i)+" MLP Regressor relu "+app, X, y))
@@ -2071,8 +2211,8 @@ def ml(model_idx, app, baseline, only_count=False):
         y = X["timeTaken"].astype(float)
         # Prevent empty values for y.
         # This should never happen if tests complete gracefully.
-        # Default to the max time of 24 hours.
-        y = y.fillna(86400.0)
+        # Default to the max time of 48 hours.
+        y = y.fillna(86400.0*2)
 
     # When predicting, time taken cannot be known ahead of time.
     X = X.drop(columns="timeTaken")
@@ -2186,6 +2326,7 @@ def base_test():
 
 def main():
     global range_params
+    global should_depickle
 
     parser = argparse.ArgumentParser(
         description="Test and train a predictive framework.")
@@ -2199,12 +2340,15 @@ def main():
                         help="App name")
     parser.add_argument("--baseline", type=int, choices=[0, 1], required=False,
                         help="Whether or not to run baseline (nodes and tasks only) tests")
+    parser.add_argument("--depickle", action='store_true',
+                        help="Whether to compute ML models or depickle already-made ones from file")
     args = parser.parse_args()
     doML = args.doML
     fromCSV = args.fromCSV
     model_idx = args.modelIdx
     app_name = args.app
     baseline = True if args.baseline == 1 else False
+    should_depickle = args.depickle
 
     # Optionally start training from CSV immediately.
     if fromCSV:

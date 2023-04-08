@@ -39,7 +39,10 @@ class AnalyticalRegressor(BaseEstimator, RegressorMixin):
         # print(df)
 
         # Multiplier found on Voltrino to best match scaling to seconds.
-        MULTIPLIER = 1/4349848.332
+        # MULTIPLIER = 1/4349848.332
+        # Multiplier found on Eclipse to best match scaling to seconds.
+        MULTIPLIER = 1/44859701.34
+
         # These factors and relationships were found by visually inspecting
         # correlation plots. ML
         predictions = df["n_repetitions"] * \
